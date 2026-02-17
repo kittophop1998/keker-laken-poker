@@ -1,9 +1,9 @@
-const { createServer } = require('http');
-const { Server } = require('socket.io');
-const next = require('next');
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import next from 'next';
 
 const dev = process.env.NODE_ENV !== 'production';
-const hostname = '0.0.0.0'; // Listen on all network interfaces
+const hostname = '0.0.0.0';
 const port = 3002;
 
 const app = next({ dev, hostname, port });

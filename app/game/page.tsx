@@ -1,16 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import styles from './game.module.css';
-import BugReportIcon from '@mui/icons-material/BugReport';
-import PestControlIcon from '@mui/icons-material/PestControl';
-import GrassIcon from '@mui/icons-material/Grass';
-import MoodBadIcon from '@mui/icons-material/MoodBad';
-import FlightIcon from '@mui/icons-material/Flight';
-import NightsStayIcon from '@mui/icons-material/NightsStay';
-import WaterIcon from '@mui/icons-material/Water';
-import CoronavirusIcon from '@mui/icons-material/Coronavirus';
 
 interface Card {
   animal: string;
@@ -59,11 +51,15 @@ export default function GamePage() {
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
   const [selectedAnimal, setSelectedAnimal] = useState<string>('แมลงสาบ');
   const [message, setMessage] = useState('');
-  const [revealedCard, setRevealedCard] = useState<Card | null>(null);
   const [currentAction, setCurrentAction] = useState<CurrentAction | null>(null);
   const [gameLogs, setGameLogs] = useState<GameLog[]>([]);
+  const [sortCards, setSortCards] = useState<boolean>(false);
+  
+  // Refs for auto-scrolling
+  const logsEndRef = useRef<HTMLDivElement>(null);
+  const challengeActionsRef = useRef<HTMLDivElement>(null);
 
-  const ANIMALS = ['แมลงสาบ', 'หนู', 'แมลงเขียว', 'แมงมุม', 'แมลงวัน', 'ค้างคาว', 'กบ', 'แมงป่อง'];
+  const ANIMALS = ['แมลงสาบ', 'หนู', 'แมลงวัน', 'แมงป่อง', 'แมลงเขียว', 'แมงมุม', 'ค้างคาว', 'กบ'];
 
   const addLog = (type: GameLog['type'], message: string) => {
     setGameLogs(prev => [...prev, {
@@ -74,13 +70,30 @@ export default function GamePage() {
     }]);
   };
 
+  // Auto-scroll ไปที่ log ล่าสุด
   useEffect(() => {
-    const newSocket = io('http://localhost:3000', {
-      transports: ['websocket', 'polling']
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [gameLogs]);
+
+  useEffect(() => {
+    // Initialize Socket.IO API endpoint first
+    fetch('/api/socketio');
+    
+    // Use the same host as the current page for Socket.IO connection
+    const socketUrl = typeof window !== 'undefined' 
+      ? `${window.location.protocol}//${window.location.host}`
+      : 'http://localhost:3002';
+    
+    const newSocket = io(socketUrl, {
+      path: '/api/socketio',
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000
     });
 
     newSocket.on('connect', () => {
-      console.log('Connected to server');
+      console.log('Connected to server at:', socketUrl);
       setSocket(newSocket);
     });
 
@@ -116,24 +129,14 @@ export default function GamePage() {
     newSocket.on('cardSent', (data) => {
       setMessage(`${data.from} ส่งไพ่ให้ ${data.to} โดยอ้างว่าเป็น ${data.claim}`);
       setCurrentAction(data);
-      setRevealedCard(null);
       
       // เพิ่ม log เมื่อได้รับไพ่
       addLog('receive', `📩 ${data.from} ส่งไพ่ให้ ${data.to} อ้างว่าเป็น ${data.claim}`);
     });
 
-    newSocket.on('revealCard', (card) => {
-      setRevealedCard(card);
-      setMessage(`ไพ่ที่ได้รับคือ ${card.animal}`);
-      
-      // เพิ่ม log เมื่อเปิดดูไพ่
-      addLog('receive', `👁️ คุณเปิดดูไพ่: ${card.animal}`);
-    });
-
     newSocket.on('challengeResult', (result) => {
       setMessage(result.message);
       setCurrentAction(null);
-      setRevealedCard(null);
       
       // เพิ่ม log ผลการทาย
       addLog('challenge', `⚔️ ${result.message} (จริง: ${result.actualAnimal}, อ้าง: ${result.claimedAnimal})`);
@@ -193,48 +196,36 @@ export default function GamePage() {
     });
     setSelectedCard(null);
     setSelectedPlayer(null);
-    setRevealedCard(null);
-  };
-
-  const sendRevealedCard = () => {
-    if (!revealedCard || !selectedPlayer) {
-      setMessage('กรุณาเลือกผู้เล่นที่จะส่งให้');
-      return;
-    }
-    socket?.emit('sendRevealedCard', {
-      roomId: currentRoomId,
-      targetPlayerId: selectedPlayer,
-      cardId: revealedCard.id,
-      claimedAnimal: selectedAnimal
-    });
-    setSelectedPlayer(null);
-    setRevealedCard(null);
-    setCurrentAction(null);
   };
 
   const handleChallenge = (guessIsLie: boolean) => {
     socket?.emit('challenge', { roomId: currentRoomId, guessIsLie });
   };
 
-  const handlePass = () => {
-    socket?.emit('passCard', { roomId: currentRoomId });
-  };
-
-  const getAnimalIcon = (animal: string) => {
-    const icons: { [key: string]: JSX.Element } = {
-      'แมลงสาบ': <BugReportIcon sx={{ fontSize: 'inherit', color: '#8B4513' }} />,
-      'หนู': <PestControlIcon sx={{ fontSize: 'inherit', color: '#696969' }} />,
-      'แมลงเขียว': <GrassIcon sx={{ fontSize: 'inherit', color: '#32CD32' }} />,
-      'แมงมุม': <MoodBadIcon sx={{ fontSize: 'inherit', color: '#000000' }} />,
-      'แมลงวัน': <FlightIcon sx={{ fontSize: 'inherit', color: '#4169E1' }} />,
-      'ค้างคาว': <NightsStayIcon sx={{ fontSize: 'inherit', color: '#8B008B' }} />,
-      'กบ': <WaterIcon sx={{ fontSize: 'inherit', color: '#228B22' }} />,
-      'แมงป่อง': <CoronavirusIcon sx={{ fontSize: 'inherit', color: '#DC143C' }} />
+  const getAnimalImage = (animal: string) => {
+    const imageMap: { [key: string]: string } = {
+      'แมลงสาบ': '/Cockroach.png',
+      'หนู': '/Rat.png',
+      'แมลงเขียว': '/Cricket.png',
+      'แมงมุม': '/Spider.png',
+      'แมลงวัน': '/Fly.png',
+      'ค้างคาว': '/Bat.png',
+      'กบ': '/Frog.png',
+      'แมงป่อง': '/Scorpion.png'
     };
-    return icons[animal] || <BugReportIcon sx={{ fontSize: 'inherit' }} />;
+    return imageMap[animal] || '/Cockroach.png';
   };
 
   const isMyTurn = room?.currentPlayer === playerId;
+
+  // Auto-scroll ไปที่ challenge actions เมื่อได้รับไพ่
+  useEffect(() => {
+    if (isMyTurn && currentAction && currentAction.toId === playerId) {
+      setTimeout(() => {
+        challengeActionsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+  }, [currentAction, isMyTurn, playerId]);
 
   return (
     <div className={styles.container}>
@@ -333,7 +324,9 @@ export default function GamePage() {
                                   key={animal} 
                                   className={`${styles.animalGroup} ${count >= 4 ? styles.dangerCard : ''}`}
                                 >
-                                  <span className={styles.animalEmoji}>{getAnimalIcon(animal)}</span>
+                                  <span className={styles.animalEmoji}>
+                                    <img src={getAnimalImage(animal)} alt={animal} width={24} height={24} />
+                                  </span>
                                   <span className={styles.animalCount}>x{count}</span>
                                 </div>
                               ));
@@ -344,16 +337,12 @@ export default function GamePage() {
                             player.deadCards.forEach(card => {
                               animalCount[card.animal] = (animalCount[card.animal] || 0) + 1;
                             });
-                            const uniqueCount = Object.keys(animalCount).length;
                             const hasFourOfKind = Object.values(animalCount).some(count => count >= 4);
                             
                             return (
                               <div className={styles.warningZone}>
                                 {hasFourOfKind && (
-                                  <div className={styles.warningText}>⚠️ มีสัตว์ 4 ตัวเหมือนกัน!</div>
-                                )}
-                                {uniqueCount >= 8 && (
-                                  <div className={styles.warningText}>⚠️ มีสัตว์ครบทุกชนิด!</div>
+                                  <div className={styles.warningText}>⚠️ มีสัตว์ 4 ตัวเหมือนกัน! (กำลังจะแพ้)</div>
                                 )}
                               </div>
                             );
@@ -365,148 +354,110 @@ export default function GamePage() {
                 ))}
               </div>
 
-          {isMyTurn && myCards.length > 0 && !currentAction && (
+          {/* แสดงไพ่ในมือตลอดเวลา */}
+          <div className={styles.myCardsDisplay}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3>� ไพ่ในมือของคุณ ({myCards.length} ใบ)</h3>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input 
+                  type="checkbox" 
+                  checked={sortCards} 
+                  onChange={(e) => setSortCards(e.target.checked)}
+                />
+                <span>เรียงตามตัวอักษร</span>
+              </label>
+            </div>
+            <div className={styles.cardList}>
+              {(sortCards 
+                ? [...myCards].sort((a, b) => a.animal.localeCompare(b.animal, 'th'))
+                : myCards
+              ).map((card) => (
+                <div
+                  key={card.id}
+                  className={`${styles.card} ${
+                    selectedCard === card.id ? styles.selectedCard : ''
+                  }`}
+                  onClick={() => isMyTurn && !currentAction && setSelectedCard(card.id)}
+                  style={{ cursor: isMyTurn && !currentAction ? 'pointer' : 'default' }}
+                >
+                  <img 
+                    src={getAnimalImage(card.animal)} 
+                    alt={card.animal} 
+                    className={styles.cardImage}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {isMyTurn && myCards.length > 0 && !currentAction && selectedCard && (
             <div className={styles.turnActions}>
-              <h3>🎲 ตาของคุณ!</h3>
-              <div className={styles.myCards}>
-                <h4>ไพ่ในมือ:</h4>
-                <div className={styles.cardList}>
-                  {myCards.map((card) => (
-                    <div
-                      key={card.id}
-                      className={`${styles.card} ${
-                        selectedCard === card.id ? styles.selectedCard : ''
+              <h3>🎲 ตาของคุณ - เลือกการ์ดแล้ว!</h3>
+              <div className={styles.selectAnimal}>
+                <h4>อ้างว่าเป็น:</h4>
+                <div className={styles.animalButtons}>
+                  {ANIMALS.map((animal) => (
+                    <button
+                      key={animal}
+                      className={`${styles.animalButton} ${
+                        selectedAnimal === animal ? styles.selectedAnimal : ''
                       }`}
-                      onClick={() => setSelectedCard(card.id)}
+                      onClick={() => setSelectedAnimal(animal)}
                     >
-                      <div className={styles.cardEmoji}>{getAnimalIcon(card.animal)}</div>
-                      <div className={styles.cardName}>{card.animal}</div>
-                    </div>
+                      <span className={styles.buttonIcon}>
+                        <img src={getAnimalImage(animal)} alt={animal} width={20} height={20} />
+                      </span> {animal}
+                    </button>
                   ))}
                 </div>
               </div>
 
-              {selectedCard && (
-                <>
-                  <div className={styles.selectAnimal}>
-                    <h4>อ้างว่าเป็น:</h4>
-                    <div className={styles.animalButtons}>
-                      {ANIMALS.map((animal) => (
-                        <button
-                          key={animal}
-                          className={`${styles.animalButton} ${
-                            selectedAnimal === animal ? styles.selectedAnimal : ''
-                          }`}
-                          onClick={() => setSelectedAnimal(animal)}
-                        >
-                          <span className={styles.buttonIcon}>{getAnimalIcon(animal)}</span> {animal}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+              <div className={styles.selectPlayer}>
+                <h4>ส่งให้:</h4>
+                <div className={styles.playerButtons}>
+                  {room.players
+                    .filter((p) => p.id !== playerId)
+                    .map((player) => (
+                      <button
+                        key={player.id}
+                        className={`${styles.playerButton} ${
+                          selectedPlayer === player.id ? styles.selectedPlayerBtn : ''
+                        }`}
+                        onClick={() => setSelectedPlayer(player.id)}
+                      >
+                        {player.name}
+                      </button>
+                    ))}
+                </div>
+              </div>
 
-                  <div className={styles.selectPlayer}>
-                    <h4>ส่งให้:</h4>
-                    <div className={styles.playerButtons}>
-                      {room.players
-                        .filter((p) => p.id !== playerId)
-                        .map((player) => (
-                          <button
-                            key={player.id}
-                            className={`${styles.playerButton} ${
-                              selectedPlayer === player.id ? styles.selectedPlayerBtn : ''
-                            }`}
-                            onClick={() => setSelectedPlayer(player.id)}
-                          >
-                            {player.name}
-                          </button>
-                        ))}
-                    </div>
-                  </div>
-
-                  <button onClick={sendCard} className={styles.sendButton}>
-                    ส่งไพ่
-                  </button>
-                </>
-              )}
+              <button onClick={sendCard} className={styles.sendButton}>
+                ส่งไพ่
+              </button>
             </div>
           )}
 
           {isMyTurn && currentAction && currentAction.toId === playerId && (
-            <div className={styles.challengeActions}>
+            <div className={styles.challengeActions} ref={challengeActionsRef}>
               <h3>🤔 คุณได้รับไพ่!</h3>
               <p>
                 {currentAction.from} บอกว่าเป็น <strong>{currentAction.claim}</strong>
               </p>
 
-              {!revealedCard ? (
-                <div className={styles.actionButtons}>
-                  <button
-                    onClick={() => handleChallenge(true)}
-                    className={`${styles.button} ${styles.lieButton}`}
-                  >
-                    ❌ โกหก!
-                  </button>
-                  <button
-                    onClick={() => handleChallenge(false)}
-                    className={`${styles.button} ${styles.truthButton}`}
-                  >
-                    ✅ จริง!
-                  </button>
-                  <button onClick={handlePass} className={styles.button}>
-                    👁️ ดูไพ่และส่งต่อ
-                  </button>
-                </div>
-              ) : (
-                <div className={styles.revealedCard}>
-                  <h4>ไพ่ที่คุณได้รับคือ:</h4>
-                  <div className={styles.bigCard}>
-                    <div className={styles.bigCardEmoji}>{getAnimalIcon(revealedCard.animal)}</div>
-                    <div className={styles.bigCardName}>{revealedCard.animal}</div>
-                  </div>
-                  <p>ตอนนี้คุณสามารถเลือกผู้เล่นและส่งไพ่ต่อได้</p>
-                  
-                  <div className={styles.selectAnimal}>
-                    <h4>อ้างว่าเป็น:</h4>
-                    <div className={styles.animalButtons}>
-                      {ANIMALS.map((animal) => (
-                        <button
-                          key={animal}
-                          className={`${styles.animalButton} ${
-                            selectedAnimal === animal ? styles.selectedAnimal : ''
-                          }`}
-                          onClick={() => setSelectedAnimal(animal)}
-                        >
-                          <span className={styles.buttonIcon}>{getAnimalIcon(animal)}</span> {animal}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className={styles.selectPlayer}>
-                    <h4>ส่งให้:</h4>
-                    <div className={styles.playerButtons}>
-                      {room.players
-                        .filter((p) => p.id !== playerId)
-                        .map((player) => (
-                          <button
-                            key={player.id}
-                            className={`${styles.playerButton} ${
-                              selectedPlayer === player.id ? styles.selectedPlayerBtn : ''
-                            }`}
-                            onClick={() => setSelectedPlayer(player.id)}
-                          >
-                            {player.name}
-                          </button>
-                        ))}
-                    </div>
-                  </div>
-
-                  <button onClick={sendRevealedCard} className={styles.sendButton}>
-                    ส่งไพ่ต่อ
-                  </button>
-                </div>
-              )}
+              <div className={styles.actionButtons}>
+                <button
+                  onClick={() => handleChallenge(true)}
+                  className={`${styles.button} ${styles.lieButton}`}
+                >
+                  ❌ โกหก!
+                </button>
+                <button
+                  onClick={() => handleChallenge(false)}
+                  className={`${styles.button} ${styles.truthButton}`}
+                >
+                  ✅ จริง!
+                </button>
+              </div>
             </div>
           )}
 
@@ -524,18 +475,21 @@ export default function GamePage() {
                 {gameLogs.length === 0 ? (
                   <div className={styles.noLogs}>ยังไม่มีประวัติ</div>
                 ) : (
-                  gameLogs.map((log) => (
-                    <div key={log.id} className={`${styles.logItem} ${styles[`log${log.type}`]}`}>
-                      <div className={styles.logMessage}>{log.message}</div>
-                      <div className={styles.logTime}>
-                        {log.timestamp.toLocaleTimeString('th-TH', { 
-                          hour: '2-digit', 
-                          minute: '2-digit',
-                          second: '2-digit'
-                        })}
+                  <>
+                    {gameLogs.map((log) => (
+                      <div key={log.id} className={`${styles.logItem} ${styles[`log${log.type}`]}`}>
+                        <div className={styles.logMessage}>{log.message}</div>
+                        <div className={styles.logTime}>
+                          {log.timestamp.toLocaleTimeString('th-TH', { 
+                            hour: '2-digit', 
+                            minute: '2-digit',
+                            second: '2-digit'
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    ))}
+                    <div ref={logsEndRef} />
+                  </>
                 )}
               </div>
             </div>
