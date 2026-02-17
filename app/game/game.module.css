@@ -178,24 +178,23 @@
 }
 
 .animalGroup {
-  background: rgba(255, 255, 255, 0.15);
+  background: transparent;
   padding: 8px;
   border-radius: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   transition: all 0.3s;
   border: 2px solid transparent;
 }
 
 .animalGroup:hover {
-  background: rgba(255, 255, 255, 0.25);
-  transform: scale(1.05);
+  transform: scale(1.1);
 }
 
 .dangerCard {
-  background: rgba(255, 107, 107, 0.3);
+  background: rgba(255, 107, 107, 0.2);
   border-color: rgba(255, 107, 107, 0.6);
   animation: pulse 2s infinite;
 }
@@ -210,10 +209,17 @@
 }
 
 .animalEmoji {
-  font-size: 1.8rem;
+  font-size: 2.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.animalEmoji img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
 }
 
 .animalCount {

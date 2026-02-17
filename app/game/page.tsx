@@ -337,7 +337,7 @@ export default function GamePage() {
                                       className={`${styles.animalGroup} ${count >= 4 ? styles.dangerCard : ''}`}
                                     >
                                       <span className={styles.animalEmoji}>
-                                        <img src={getAnimalImage(animal)} alt={animal} width={24} height={24} />
+                                        <img src={getAnimalImage(animal)} alt={animal} />
                                       </span>
                                       <span className={styles.animalCount}>x{count}</span>
                                     </div>
