@@ -301,12 +301,13 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseW
         return;
       }
 
-      // เงื่อนไข 2: มีสัตว์ชนิดเดียวกัน 4 ใบในไพ่ที่เก็บ (แพ้)
+      // นับจำนวนสัตว์แต่ละชนิดในไพ่ที่เก็บ
       const animalCount: { [key: string]: number } = {};
       player.deadCards.forEach(card => {
         animalCount[card.animal] = (animalCount[card.animal] || 0) + 1;
       });
 
+      // เงื่อนไข 2: มีสัตว์ชนิดเดียวกัน 4 ใบในไพ่ที่เก็บ (แพ้)
       for (const [animal, count] of Object.entries(animalCount)) {
         if (count >= 4) {
           io.to(roomId).emit('gameOver', {
@@ -321,6 +322,22 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseW
           room.currentCardSender = null;
           return;
         }
+      }
+
+      // เงื่อนไข 3: มีสัตว์ครบ 8 ชนิดในไพ่ที่เก็บ (แพ้)
+      const uniqueAnimals = Object.keys(animalCount);
+      if (uniqueAnimals.length >= 8) {
+        io.to(roomId).emit('gameOver', {
+          loser: player.name,
+          loserId: player.id,
+          reason: `มีสัตว์ครบ 8 ชนิด`
+        });
+        room.gameStarted = false;
+        room.currentPlayer = null;
+        room.currentCard = null;
+        room.currentClaim = null;
+        room.currentCardSender = null;
+        return;
       }
     }
   }

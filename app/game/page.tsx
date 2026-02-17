@@ -143,11 +143,14 @@ export default function GamePage() {
     });
 
     newSocket.on('gameOver', (data) => {
-      setMessage(`🎮 จบเกม! ${data.loser} แพ้เพราะ${data.reason}`);
+      // แสดงข้อความจบเกม (ทุกกรณีคือการแพ้)
+      const displayMessage = `🎮 จบเกม! ${data.loser} แพ้เพราะ${data.reason}`;
+      
+      setMessage(displayMessage);
       setGameState('waiting');
       
       // เพิ่ม log จบเกม
-      addLog('gameOver', `🎮 จบเกม! ${data.loser} แพ้เพราะ${data.reason}`);
+      addLog('gameOver', displayMessage);
     });
 
     newSocket.on('playerLeft', (data) => {
@@ -319,17 +322,28 @@ export default function GamePage() {
                                 animalCount[card.animal] = (animalCount[card.animal] || 0) + 1;
                               });
                               
-                              return Object.entries(animalCount).map(([animal, count]) => (
-                                <div 
-                                  key={animal} 
-                                  className={`${styles.animalGroup} ${count >= 4 ? styles.dangerCard : ''}`}
-                                >
-                                  <span className={styles.animalEmoji}>
-                                    <img src={getAnimalImage(animal)} alt={animal} width={24} height={24} />
-                                  </span>
-                                  <span className={styles.animalCount}>x{count}</span>
-                                </div>
-                              ));
+                              const uniqueCount = Object.keys(animalCount).length;
+                              
+                              return (
+                                <>
+                                  <div className={styles.animalStats}>
+                                    <span className={uniqueCount >= 8 ? styles.loseCondition : ''}>
+                                      🎯 {uniqueCount}/8 ชนิด
+                                    </span>
+                                  </div>
+                                  {Object.entries(animalCount).map(([animal, count]) => (
+                                    <div 
+                                      key={animal} 
+                                      className={`${styles.animalGroup} ${count >= 4 ? styles.dangerCard : ''}`}
+                                    >
+                                      <span className={styles.animalEmoji}>
+                                        <img src={getAnimalImage(animal)} alt={animal} width={24} height={24} />
+                                      </span>
+                                      <span className={styles.animalCount}>x{count}</span>
+                                    </div>
+                                  ))}
+                                </>
+                              );
                             })()}
                           </div>
                           {(() => {
@@ -338,11 +352,15 @@ export default function GamePage() {
                               animalCount[card.animal] = (animalCount[card.animal] || 0) + 1;
                             });
                             const hasFourOfKind = Object.values(animalCount).some(count => count >= 4);
+                            const uniqueCount = Object.keys(animalCount).length;
                             
                             return (
                               <div className={styles.warningZone}>
                                 {hasFourOfKind && (
                                   <div className={styles.warningText}>⚠️ มีสัตว์ 4 ตัวเหมือนกัน! (กำลังจะแพ้)</div>
+                                )}
+                                {uniqueCount >= 8 && (
+                                  <div className={styles.warningText}>⚠️ ครบ 8 ชนิด! (กำลังจะแพ้)</div>
                                 )}
                               </div>
                             );
@@ -357,7 +375,7 @@ export default function GamePage() {
           {/* แสดงไพ่ในมือตลอดเวลา */}
           <div className={styles.myCardsDisplay}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3>� ไพ่ในมือของคุณ ({myCards.length} ใบ)</h3>
+              <h3>🃏 ไพ่ในมือของคุณ ({myCards.length} ใบ)</h3>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                 <input 
                   type="checkbox" 
