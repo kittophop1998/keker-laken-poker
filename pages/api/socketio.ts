@@ -16,9 +16,9 @@ interface NextApiResponseWithSocket {
   end: () => void;
 }
 
-// Card types and animals - 8 สัตว์ เพื่อให้มีไพ่เพียงพอแจกคนละ 16 ใบ
+// Card types and animals - 8 สัตว์ ชนิดละ 8 ใบ = รวม 64 ใบ
 const ANIMALS = ['แมลงสาบ', 'หนู', 'แมลงเขียว', 'แมงมุม', 'แมลงวัน', 'ค้างคาว', 'กบ', 'แมงป่อง'];
-const CARDS_PER_PLAYER = 16; // แจกคนละ 16 ใบ
+const CARDS_PER_ANIMAL = 8; // แต่ละสัตว์มี 8 ใบ
 
 interface Card {
   animal: string;
@@ -43,14 +43,12 @@ interface Room {
   deck: Card[];
 }
 
-function createDeck(numPlayers: number): Card[] {
+function createDeck(): Card[] {
   const deck: Card[] = [];
-  const totalCardsNeeded = numPlayers * CARDS_PER_PLAYER; // คนละ 16 ใบ
-  const cardsPerAnimal = Math.ceil(totalCardsNeeded / ANIMALS.length);
   
-  // สร้างไพ่ให้เพียงพอสำหรับผู้เล่นทุกคน
+  // สร้างไพ่ 8 ชนิด ชนิดละ 8 ใบ
   ANIMALS.forEach(animal => {
-    for (let i = 0; i < cardsPerAnimal; i++) {
+    for (let i = 0; i < CARDS_PER_ANIMAL; i++) {
       deck.push({ animal, id: `${animal}-${i}` });
     }
   });
@@ -151,11 +149,16 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseW
       }
 
       room.gameStarted = true;
-      room.deck = createDeck(room.players.length);
+      room.deck = createDeck();
       
-      // แจกไพ่คนละ 16 ใบให้ผู้เล่นทุกคน
+      // คำนวณจำนวนไพ่ที่แต่ละคนจะได้รับ
+      const totalCards = room.deck.length; // 64 ใบ
+      const numPlayers = room.players.length;
+      const cardsPerPlayer = Math.floor(totalCards / numPlayers);
+      
+      // แจกไพ่ให้ผู้เล่นทุกคนตามจำนวนที่คำนวณได้
       room.players.forEach((player) => {
-        player.cards = room.deck.splice(0, CARDS_PER_PLAYER);
+        player.cards = room.deck.splice(0, cardsPerPlayer);
         player.deadCards = [];
       });
 
