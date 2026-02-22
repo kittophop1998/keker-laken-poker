@@ -12,6 +12,9 @@ const kanit = Kanit({
 export const metadata: Metadata = {
   title: "Kaker Laken Poker",
   description: "เกมโกหกสุดมันส์ที่ต้องใช้ทั้งไหวพริบและหน้านิ่ง!",
+  icons: {
+    icon: "/icon.png",
+  }
 };
 
 export default function RootLayout({
