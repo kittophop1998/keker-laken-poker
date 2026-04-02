@@ -9,7 +9,7 @@ import Button from '@mui/material/Button';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import Paper from '@mui/material/Paper';
-import Grid from '@mui/material/Grid';
+// Removed Grid import to use responsive Box-based grid for layout
 import Chip from '@mui/material/Chip';
 import Divider from '@mui/material/Divider';
 import FormControlLabel from '@mui/material/FormControlLabel';
@@ -521,8 +521,8 @@ export default function GamePage() {
           >
             {/* ── MAIN GAME AREA ── */}
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              {/* Players Grid */}
-              <Grid container spacing={2} sx={{ mb: 3 }}>
+              {/* Players Grid (responsive CSS grid) */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 2, mb: 3 }}>
                 {room.players.map((player) => {
                   const isActive = player.id === room.currentPlayer;
                   const isMe = player.id === playerId;
@@ -534,7 +534,7 @@ export default function GamePage() {
                   const uniqueCount = Object.keys(animalCount).length;
 
                   return (
-                    <Grid key={player.id} size={{ xs: 12, sm: 6, md: 4 }}>
+                    <Box key={player.id}>
                       <Paper
                         elevation={0}
                         sx={{
@@ -717,10 +717,10 @@ export default function GamePage() {
                           </>
                         )}
                       </Paper>
-                    </Grid>
+                    </Box>
                   );
                 })}
-              </Grid>
+              </Box>
 
               {/* ── MY CARDS ── */}
               <Paper
@@ -1000,8 +1000,8 @@ export default function GamePage() {
                     </strong>
                   </Typography>
 
-                  <Grid container spacing={2} justifyContent="center">
-                    <Grid size={{ xs: 12, sm: 6 }}>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 2, justifyContent: 'center' }}>
+                    <Box>
                       <Button
                         variant="contained"
                         fullWidth
@@ -1021,8 +1021,8 @@ export default function GamePage() {
                       >
                         ❌ โกหก!
                       </Button>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 6 }}>
+                    </Box>
+                    <Box>
                       <Button
                         variant="contained"
                         fullWidth
@@ -1042,8 +1042,8 @@ export default function GamePage() {
                       >
                         ✅ จริง!
                       </Button>
-                    </Grid>
-                  </Grid>
+                    </Box>
+                  </Box>
                 </Paper>
               )}
 

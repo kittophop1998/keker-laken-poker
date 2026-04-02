@@ -117,6 +117,7 @@ export default function Home() {
         <Container maxWidth="lg">
           <Grid container spacing={8} alignItems="center">
             <Grid size={{ xs: 12, md: 6 }}>
+
               <Typography
                 variant="h1"
                 sx={{
