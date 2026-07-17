@@ -264,21 +264,19 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseW
       io.to(roomId).emit('roomUpdate', room);
     });
 
-    socket.on('startGame', ({ roomId }: { roomId: string }) => {
-      const room = rooms.get(roomId);
-      if (!room || room.players.length < 2) {
-        socket.emit('error', 'ต้องมีผู้เล่นอย่างน้อย 2 คน');
-        return;
-      }
-
+    // เริ่มเกม: ล้างสถานะเดิม สร้างสำรับใหม่ แจกไพ่ แล้วแจ้งทุกคน (ใช้ทั้งเริ่มครั้งแรกและเริ่มใหม่)
+    function dealAndStartGame(room: Room) {
       room.gameStarted = true;
       room.deck = createDeck();
-      
+      room.currentCard = null;
+      room.currentClaim = null;
+      room.currentCardSender = null;
+
       // คำนวณจำนวนไพ่ที่แต่ละคนจะได้รับ
       const totalCards = room.deck.length; // 64 ใบ
       const numPlayers = room.players.length;
       const cardsPerPlayer = Math.floor(totalCards / numPlayers);
-      
+
       // แจกไพ่ให้ผู้เล่นทุกคนตามจำนวนที่คำนวณได้
       room.players.forEach((player) => {
         player.cards = room.deck.splice(0, cardsPerPlayer);
@@ -286,12 +284,45 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseW
       });
 
       room.currentPlayer = room.players[0].id;
-      
+
       // ส่งข้อมูลห้องและไพ่ให้ผู้เล่นแต่ละคน
-      io.to(roomId).emit('gameStarted', room);
-      
+      io.to(room.id).emit('gameStarted', room);
+
       room.players.forEach((player) => {
         io.to(player.id).emit('yourCards', player.cards);
+      });
+    }
+
+    socket.on('startGame', ({ roomId }: { roomId: string }) => {
+      const room = rooms.get(roomId);
+      if (!room || room.players.length < 2) {
+        socket.emit('error', 'ต้องมีผู้เล่นอย่างน้อย 2 คน');
+        return;
+      }
+
+      dealAndStartGame(room);
+    });
+
+    // เริ่มเกมใหม่ระหว่างที่กำลังเล่นอยู่ — เฉพาะหัวหน้าห้อง (คนแรกในห้อง)
+    socket.on('restartGame', ({ roomId }: { roomId: string }) => {
+      const room = rooms.get(roomId);
+      if (!room || !room.gameStarted) return;
+
+      const host = room.players[0];
+      if (!host || host.id !== socket.id) {
+        socket.emit('error', 'เฉพาะหัวหน้าห้องเท่านั้นที่เริ่มเกมใหม่ได้');
+        return;
+      }
+
+      if (room.players.length < 2) {
+        socket.emit('error', 'ต้องมีผู้เล่นอย่างน้อย 2 คน');
+        return;
+      }
+
+      dealAndStartGame(room);
+      // ส่งหลัง gameStarted เพื่อให้ข้อความ "เริ่มเกมใหม่" เป็นข้อความล่าสุดที่ทุกคนเห็น
+      io.to(roomId).emit('gameRestarted', {
+        message: `${host.name} เริ่มเกมใหม่! ล้างไพ่ทั้งหมดแล้วแจกใหม่`
       });
     });
 

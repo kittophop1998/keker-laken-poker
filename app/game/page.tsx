@@ -30,6 +30,7 @@ import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
 import GroupAddRoundedIcon from '@mui/icons-material/GroupAddRounded';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
+import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
 import StarRoundedIcon from '@mui/icons-material/StarRounded';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import StyleRoundedIcon from '@mui/icons-material/StyleRounded';
@@ -363,6 +364,14 @@ export default function GamePage() {
       setMessage('เกมเริ่มแล้ว! หน้านิ่งเข้าไว้');
       setGameLogs([]);
       setGameOverInfo(null);
+      // ล้างสถานะค้างจากเกมก่อนหน้า (สำคัญตอนเริ่มเกมใหม่กลางคัน)
+      setCurrentAction(null);
+      setSelectedCard(null);
+      setSelectedPlayer(null);
+    });
+
+    newSocket.on('gameRestarted', ({ message: restartMessage }) => {
+      setMessage(restartMessage);
     });
 
     newSocket.on('yourCards', (cards) => {
@@ -445,6 +454,11 @@ export default function GamePage() {
 
   const startGame = () => {
     socketRef.current?.emit('startGame', { roomId: currentRoomId });
+  };
+
+  const restartGame = () => {
+    if (!window.confirm('เริ่มเกมใหม่เลยไหม? ไพ่ในมือและไพ่สะสมของทุกคนจะถูกล้างแล้วแจกใหม่')) return;
+    socketRef.current?.emit('restartGame', { roomId: currentRoomId });
   };
 
   const sendCard = () => {
@@ -1423,6 +1437,27 @@ export default function GamePage() {
                   gap: 2,
                 }}
               >
+              {/* ── ปุ่มเริ่มเกมใหม่ (เฉพาะหัวหน้าห้อง) ── */}
+              {room.players[0]?.id === playerId && (
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  startIcon={<RestartAltRoundedIcon />}
+                  onClick={restartGame}
+                  sx={{
+                    py: 1.2,
+                    borderColor: 'rgba(229,115,115,0.5)',
+                    color: '#E57373',
+                    bgcolor: 'rgba(255,255,255,0.7)',
+                    '&:hover': {
+                      borderColor: '#E57373',
+                      bgcolor: 'rgba(229,115,115,0.08)',
+                    },
+                  }}
+                >
+                  เริ่มเกมใหม่ (แจกไพ่ใหม่ทั้งหมด)
+                </Button>
+              )}
               <Paper
                 elevation={0}
                 sx={{
