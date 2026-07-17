@@ -5,7 +5,7 @@ import ThemeRegistry from "./ThemeRegistry";
 
 const kanit = Kanit({
   subsets: ["latin", "thai"],
-  weight: ["300", "400", "700", "900"],
+  weight: ["300", "400", "500", "600", "700", "900"],
   variable: "--font-kanit",
 });
 

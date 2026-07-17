@@ -266,6 +266,24 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseW
       checkGameEnd(roomId, io);
     });
 
+    // ส่งคำแซวกวนๆ ให้ทุกคนในห้องเห็น
+    socket.on('sendEmote', ({ roomId, text }: { roomId: string; text: string }) => {
+      const room = rooms.get(roomId);
+      if (!room) return;
+
+      const sender = room.players.find(p => p.id === socket.id);
+      if (!sender) return;
+
+      // กันสแปมข้อความยาวเกิน
+      const safeText = String(text).slice(0, 60);
+
+      io.to(roomId).emit('emote', {
+        from: sender.name,
+        fromId: sender.id,
+        text: safeText
+      });
+    });
+
     socket.on('disconnect', () => {
       console.log('Player disconnected:', socket.id);
       
