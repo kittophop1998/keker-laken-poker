@@ -45,6 +45,7 @@ interface Player {
   name: string;
   cards: Card[];
   deadCards: Card[];
+  disconnected?: boolean;
 }
 
 interface Room {
@@ -153,6 +154,51 @@ const DETECTOR_VERDICTS = [
 
 const randomOf = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
+// ── จำตัวตนผู้เล่นไว้ใน localStorage เพื่อให้กลับเข้าห้องเดิมได้หลังหลุด/ปิดเว็บ ──
+const SESSION_KEY = 'klp_session_id';
+const LAST_ROOM_KEY = 'klp_last_room';
+const LAST_ROOM_TTL_MS = 3 * 60 * 60 * 1000; // จำห้องล่าสุดไว้ 3 ชั่วโมง
+
+function getSessionId(): string {
+  try {
+    let id = localStorage.getItem(SESSION_KEY);
+    if (!id) {
+      id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      localStorage.setItem(SESSION_KEY, id);
+    }
+    return id;
+  } catch {
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
+
+function readSavedRoom(): { roomId: string; playerName: string } | null {
+  try {
+    const raw = localStorage.getItem(LAST_ROOM_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw);
+    if (!saved?.roomId || Date.now() - (saved.ts || 0) > LAST_ROOM_TTL_MS) {
+      localStorage.removeItem(LAST_ROOM_KEY);
+      return null;
+    }
+    return { roomId: saved.roomId, playerName: saved.playerName || '' };
+  } catch {
+    return null;
+  }
+}
+
+function saveRoom(roomId: string, playerName: string) {
+  try {
+    localStorage.setItem(LAST_ROOM_KEY, JSON.stringify({ roomId, playerName, ts: Date.now() }));
+  } catch {}
+}
+
+function clearSavedRoom() {
+  try {
+    localStorage.removeItem(LAST_ROOM_KEY);
+  } catch {}
+}
+
 export default function GamePage() {
   const socketRef = useRef<Socket | null>(null);
   const [playerName, setPlayerName] = useState('');
@@ -187,6 +233,11 @@ export default function GamePage() {
   const challengeActionsRef = useRef<HTMLDivElement>(null);
   const chatBoxRef = useRef<HTMLDivElement>(null);
 
+  // Refs สำหรับ auto-rejoin — ให้ handler ใน socket effect อ่านค่าล่าสุดได้เสมอ
+  const sessionIdRef = useRef('');
+  const currentRoomIdRef = useRef('');
+  const playerNameRef = useRef('');
+
   const ANIMALS = ['แมลงสาบ', 'หนู', 'แมลงวัน', 'แมงป่อง', 'แมลงเขียว', 'แมงมุม', 'ค้างคาว', 'กบ'];
 
   const addLog = (type: GameLog['type'], message: string) => {
@@ -220,6 +271,8 @@ export default function GamePage() {
     // Initialize Socket.IO API endpoint first
     fetch('/api/socketio');
 
+    sessionIdRef.current = getSessionId();
+
     // Use the same host as the current page for Socket.IO connection
     const socketUrl = typeof window !== 'undefined'
       ? `${window.location.protocol}//${window.location.host}`
@@ -229,32 +282,79 @@ export default function GamePage() {
       path: '/api/socketio',
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000
     });
 
     socketRef.current = newSocket;
 
     newSocket.on('connect', () => {
       console.log('Connected to server at:', socketUrl);
+
+      // เคยอยู่ในห้อง (หลุดชั่วคราว หรือปิดเว็บแล้วกลับมา) → กลับเข้าห้องเดิมอัตโนมัติ
+      const saved = readSavedRoom();
+      if (saved?.playerName) {
+        // เติมชื่อเดิมในช่องกรอกให้ (เฉพาะตอนที่ยังไม่ได้พิมพ์อะไรไว้)
+        setPlayerName(prev => prev || saved.playerName);
+      }
+      const target = currentRoomIdRef.current
+        ? { roomId: currentRoomIdRef.current, playerName: playerNameRef.current }
+        : saved;
+      if (target?.roomId) {
+        newSocket.emit('joinRoom', {
+          roomId: target.roomId,
+          playerName: target.playerName,
+          sessionId: sessionIdRef.current
+        });
+      }
     });
 
-    newSocket.on('roomCreated', ({ roomId, playerId }) => {
+    newSocket.on('roomCreated', ({ roomId, playerId, playerName: joinedName }) => {
+      currentRoomIdRef.current = roomId;
+      playerNameRef.current = joinedName || '';
+      saveRoom(roomId, joinedName || '');
       setCurrentRoomId(roomId);
       setPlayerId(playerId);
       setGameState('waiting');
       setMessage(`สร้างห้อง ${roomId} สำเร็จ! แชร์รหัสนี้ให้เพื่อน`);
     });
 
-    newSocket.on('roomJoined', ({ roomId, playerId }) => {
+    newSocket.on('roomJoined', ({ roomId, playerId, playerName: joinedName, rejoined }) => {
+      currentRoomIdRef.current = roomId;
+      playerNameRef.current = joinedName || '';
+      saveRoom(roomId, joinedName || '');
       setCurrentRoomId(roomId);
       setPlayerId(playerId);
       setGameState('waiting');
-      setMessage('เข้าร่วมห้องสำเร็จ!');
+      setMessage(rejoined ? 'กลับเข้าห้องเดิมสำเร็จ!' : 'เข้าร่วมห้องสำเร็จ!');
+    });
+
+    newSocket.on('joinFailed', ({ reason }) => {
+      // ห้องเดิมไม่อยู่แล้ว (หรือเข้าไม่ได้) → ล้างค่าที่จำไว้ กลับหน้า lobby
+      clearSavedRoom();
+      currentRoomIdRef.current = '';
+      setCurrentRoomId('');
+      setRoom(null);
+      setGameState('lobby');
+      setMessage(reason);
     });
 
     newSocket.on('roomUpdate', (updatedRoom) => {
       setRoom(updatedRoom);
+      // เกมถูกยกเลิก/จบไปแล้วระหว่างที่เราหลุด → กลับไปหน้าห้องรอ
+      if (updatedRoom && !updatedRoom.gameStarted) {
+        setGameState(prev => (prev === 'playing' ? 'waiting' : prev));
+      }
+    });
+
+    newSocket.on('gameCancelled', ({ message: cancelMessage }) => {
+      setCurrentAction(null);
+      setGameState('waiting');
+      setMessage(cancelMessage);
+    });
+
+    newSocket.on('playerDisconnected', ({ playerName: leftName }) => {
+      setMessage(`${leftName} หลุดการเชื่อมต่อ กำลังรอกลับเข้ามา...`);
     });
 
     newSocket.on('gameStarted', (updatedRoom) => {
@@ -332,7 +432,7 @@ export default function GamePage() {
       setMessage('กรุณาใส่ชื่อของคุณ (หรือกดลูกเต๋าให้ระบบตั้งให้)');
       return;
     }
-    socketRef.current?.emit('createRoom', { playerName });
+    socketRef.current?.emit('createRoom', { playerName, sessionId: sessionIdRef.current });
   };
 
   const joinRoom = () => {
@@ -340,7 +440,7 @@ export default function GamePage() {
       setMessage('กรุณาใส่ชื่อและรหัสห้อง');
       return;
     }
-    socketRef.current?.emit('joinRoom', { roomId: roomId.toUpperCase(), playerName });
+    socketRef.current?.emit('joinRoom', { roomId: roomId.toUpperCase(), playerName, sessionId: sessionIdRef.current });
   };
 
   const startGame = () => {
@@ -773,6 +873,13 @@ export default function GamePage() {
                           sx={{ bgcolor: '#7CB342', color: '#fff', height: 20, fontSize: '0.7rem' }}
                         />
                       )}
+                      {player.disconnected && (
+                        <Chip
+                          label="หลุดการเชื่อมต่อ"
+                          size="small"
+                          sx={{ bgcolor: 'rgba(229,115,115,0.15)', color: '#E57373', height: 20, fontSize: '0.7rem' }}
+                        />
+                      )}
                     </Typography>
                   </Box>
                 ))}
@@ -866,6 +973,13 @@ export default function GamePage() {
                               label="คุณ"
                               size="small"
                               sx={{ bgcolor: '#42A5F5', color: '#fff', height: 18, fontSize: '0.65rem' }}
+                            />
+                          )}
+                          {player.disconnected && (
+                            <Chip
+                              label="หลุด"
+                              size="small"
+                              sx={{ bgcolor: 'rgba(229,115,115,0.15)', color: '#E57373', height: 18, fontSize: '0.65rem' }}
                             />
                           )}
                         </Typography>
