@@ -33,6 +33,7 @@ import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import StarRoundedIcon from '@mui/icons-material/StarRounded';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import StyleRoundedIcon from '@mui/icons-material/StyleRounded';
+import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 
 interface Card {
   animal: string;
@@ -72,6 +73,14 @@ interface EmoteBubble {
   id: number;
   from: string;
   text: string;
+}
+
+interface ChatMessage {
+  id: string;
+  from: string;
+  fromId: string;
+  text: string;
+  timestamp: number;
 }
 
 interface GameOverInfo {
@@ -169,9 +178,14 @@ export default function GamePage() {
   const [gameOverInfo, setGameOverInfo] = useState<GameOverInfo | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Refs for auto-scrolling
-  const logsEndRef = useRef<HTMLDivElement>(null);
+  // ── แชทในห้อง (ล้างทิ้งเมื่อจบเกม) ──
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+
+  // Refs for auto-scrolling (เลื่อนเฉพาะในกล่อง ไม่เลื่อนทั้งหน้า)
+  const logsBoxRef = useRef<HTMLDivElement>(null);
   const challengeActionsRef = useRef<HTMLDivElement>(null);
+  const chatBoxRef = useRef<HTMLDivElement>(null);
 
   const ANIMALS = ['แมลงสาบ', 'หนู', 'แมลงวัน', 'แมงป่อง', 'แมลงเขียว', 'แมงมุม', 'ค้างคาว', 'กบ'];
 
@@ -184,10 +198,17 @@ export default function GamePage() {
     }]);
   };
 
-  // Auto-scroll ไปที่ log ล่าสุด
+  // Auto-scroll ไปที่ log ล่าสุด — เลื่อนแค่ในกล่อง log ไม่ดึงทั้งหน้าขึ้นไป
   useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = logsBoxRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [gameLogs]);
+
+  // Auto-scroll ไปที่ข้อความแชทล่าสุด — เลื่อนแค่ในกล่องแชทเช่นกัน
+  useEffect(() => {
+    const el = chatBoxRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  }, [chatMessages]);
 
   // หมุนคำคมนักโกหกทุก 6 วินาที
   useEffect(() => {
@@ -281,6 +302,18 @@ export default function GamePage() {
       }, 4200);
     });
 
+    newSocket.on('chatMessage', (msg: ChatMessage) => {
+      setChatMessages(prev => [...prev.slice(-99), msg]);
+    });
+
+    newSocket.on('chatHistory', (messages: ChatMessage[]) => {
+      setChatMessages(messages);
+    });
+
+    newSocket.on('chatCleared', () => {
+      setChatMessages([]);
+    });
+
     newSocket.on('playerLeft', (data) => {
       setMessage(`${data.playerName} ออกจากห้อง (หนีความพ่ายแพ้สินะ)`);
     });
@@ -339,6 +372,13 @@ export default function GamePage() {
     socketRef.current?.emit('sendEmote', { roomId: currentRoomId, text });
   };
 
+  const sendChat = () => {
+    const text = chatInput.trim();
+    if (!text) return;
+    socketRef.current?.emit('sendChatMessage', { roomId: currentRoomId, text });
+    setChatInput('');
+  };
+
   const rollFunnyName = () => {
     setPlayerName(randomOf(FUNNY_NAMES));
   };
@@ -393,6 +433,105 @@ export default function GamePage() {
     borderRadius: '1.5rem',
     boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
   };
+
+  // ── กล่องแชทในห้อง (ใช้ทั้งห้องรอและตอนเล่น) ──
+  const chatPanel = (
+    <Paper elevation={0} sx={{ ...softCard, p: 2.5, display: 'flex', flexDirection: 'column' }}>
+      <Typography
+        component="div"
+        variant="h6"
+        fontWeight={700}
+        sx={{ mb: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}
+      >
+        <ForumRoundedIcon sx={{ color: '#42A5F5' }} />
+        แชทในห้อง
+      </Typography>
+      <Typography variant="caption" sx={{ color: '#B0BEC5', mb: 1.5 }}>
+        เห็นเฉพาะคนในห้องนี้ และจะถูกล้างเมื่อจบเกม
+      </Typography>
+
+      <Box
+        ref={chatBoxRef}
+        sx={{
+          height: 220,
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 1,
+          mb: 1.5,
+          pr: 0.5,
+          '&::-webkit-scrollbar': { width: 4 },
+          '&::-webkit-scrollbar-track': { bgcolor: 'rgba(55,71,79,0.05)', borderRadius: 2 },
+          '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(66,165,245,0.4)', borderRadius: 2 },
+        }}
+      >
+        {chatMessages.length === 0 ? (
+          <Typography
+            variant="body2"
+            sx={{ color: '#B0BEC5', textAlign: 'center', fontStyle: 'italic', py: 4 }}
+          >
+            ยังไม่มีข้อความ ทักไปเลย อย่าอาย
+          </Typography>
+        ) : (
+          chatMessages.map((msg) => {
+            const mine = msg.fromId === playerId;
+            return (
+              <Box key={msg.id} sx={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
+                <Box
+                  sx={{
+                    px: 1.5,
+                    py: 0.8,
+                    borderRadius: mine ? '1rem 1rem 0.25rem 1rem' : '1rem 1rem 1rem 0.25rem',
+                    bgcolor: mine ? 'rgba(124,179,66,0.15)' : 'rgba(55,71,79,0.05)',
+                    border: mine ? '1px solid rgba(124,179,66,0.35)' : '1px solid rgba(55,71,79,0.08)',
+                  }}
+                >
+                  {!mine && (
+                    <Typography variant="caption" fontWeight={700} sx={{ color: '#8D6E63', display: 'block' }}>
+                      {msg.from}
+                    </Typography>
+                  )}
+                  <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                    {msg.text}
+                  </Typography>
+                </Box>
+              </Box>
+            );
+          })
+        )}
+      </Box>
+
+      <Box sx={{ display: 'flex', gap: 1 }}>
+        <TextField
+          size="small"
+          fullWidth
+          placeholder="พิมพ์ข้อความ..."
+          value={chatInput}
+          onChange={(e) => setChatInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              sendChat();
+            }
+          }}
+          inputProps={{ maxLength: 200 }}
+        />
+        <IconButton
+          onClick={sendChat}
+          disabled={!chatInput.trim()}
+          sx={{
+            bgcolor: '#42A5F5',
+            color: '#fff',
+            borderRadius: '0.75rem',
+            '&:hover': { bgcolor: '#1E88E5' },
+            '&.Mui-disabled': { bgcolor: 'rgba(55,71,79,0.08)', color: '#B0BEC5' },
+          }}
+        >
+          <SendRoundedIcon fontSize="small" />
+        </IconButton>
+      </Box>
+    </Paper>
+  );
 
   return (
     <Box
@@ -660,6 +799,10 @@ export default function GamePage() {
                 </Box>
               )}
             </Paper>
+
+            <Box sx={{ mt: 3, animation: 'riseIn 540ms ease-out 200ms backwards' }}>
+              {chatPanel}
+            </Box>
 
             <Typography
               key={quoteIndex}
@@ -1157,16 +1300,23 @@ export default function GamePage() {
 
             {/* ── LOGS SIDEBAR ── */}
             <Box sx={{ width: { xs: '100%', lg: 340 }, flexShrink: 0, order: { xs: -1, lg: 0 } }}>
+              <Box
+                sx={{
+                  position: { lg: 'sticky' },
+                  top: { lg: 80 },
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 2,
+                }}
+              >
               <Paper
                 elevation={0}
                 sx={{
                   ...softCard,
                   p: 2.5,
-                  maxHeight: { xs: 280, lg: '80vh' },
+                  maxHeight: { xs: 280, lg: '42vh' },
                   display: 'flex',
                   flexDirection: 'column',
-                  position: { lg: 'sticky' },
-                  top: { lg: 80 },
                 }}
               >
                 <Typography
@@ -1180,6 +1330,7 @@ export default function GamePage() {
                 </Typography>
 
                 <Box
+                  ref={logsBoxRef}
                   sx={{
                     flex: 1,
                     overflowY: 'auto',
@@ -1224,9 +1375,11 @@ export default function GamePage() {
                       </Box>
                     ))
                   )}
-                  <div ref={logsEndRef} />
                 </Box>
               </Paper>
+
+              {chatPanel}
+              </Box>
             </Box>
           </Box>
         )}

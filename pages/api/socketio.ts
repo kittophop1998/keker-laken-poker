@@ -32,6 +32,14 @@ interface Player {
   deadCards: Card[];
 }
 
+interface ChatMessage {
+  id: string;
+  from: string;
+  fromId: string;
+  text: string;
+  timestamp: number;
+}
+
 interface Room {
   id: string;
   players: Player[];
@@ -41,7 +49,11 @@ interface Room {
   currentClaim: string | null;
   currentCardSender: string | null;
   deck: Card[];
+  chatMessages: ChatMessage[];
 }
+
+const MAX_CHAT_MESSAGES = 100;
+const MAX_CHAT_LENGTH = 200;
 
 function createDeck(): Card[] {
   const deck: Card[] = [];
@@ -110,7 +122,8 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseW
         currentCard: null,
         currentClaim: null,
         currentCardSender: null,
-        deck: []
+        deck: [],
+        chatMessages: []
       });
       
       socket.join(roomId);
@@ -138,6 +151,7 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseW
       
       socket.join(roomId);
       socket.emit('roomJoined', { roomId, playerId: socket.id });
+      socket.emit('chatHistory', room.chatMessages);
       io.to(roomId).emit('roomUpdate', room);
     });
 
@@ -284,6 +298,33 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseW
       });
     });
 
+    // แชทในห้อง — เห็นเฉพาะคนในห้องนี้ และถูกล้างเมื่อจบเกม
+    socket.on('sendChatMessage', ({ roomId, text }: { roomId: string; text: string }) => {
+      const room = rooms.get(roomId);
+      if (!room) return;
+
+      const sender = room.players.find(p => p.id === socket.id);
+      if (!sender) return;
+
+      const safeText = String(text).trim().slice(0, MAX_CHAT_LENGTH);
+      if (!safeText) return;
+
+      const chatMessage: ChatMessage = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        from: sender.name,
+        fromId: sender.id,
+        text: safeText,
+        timestamp: Date.now()
+      };
+
+      room.chatMessages.push(chatMessage);
+      if (room.chatMessages.length > MAX_CHAT_MESSAGES) {
+        room.chatMessages.shift();
+      }
+
+      io.to(roomId).emit('chatMessage', chatMessage);
+    });
+
     socket.on('disconnect', () => {
       console.log('Player disconnected:', socket.id);
       
@@ -319,6 +360,9 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseW
         room.currentCard = null;
         room.currentClaim = null;
         room.currentCardSender = null;
+        // เกมจบแล้ว ล้างแชทของห้องทิ้งทั้งหมด
+        room.chatMessages = [];
+        io.to(roomId).emit('chatCleared');
         return;
       }
 
@@ -341,6 +385,9 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseW
           room.currentCard = null;
           room.currentClaim = null;
           room.currentCardSender = null;
+          // เกมจบแล้ว ล้างแชทของห้องทิ้งทั้งหมด
+          room.chatMessages = [];
+          io.to(roomId).emit('chatCleared');
           return;
         }
       }
@@ -358,6 +405,9 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseW
         room.currentCard = null;
         room.currentClaim = null;
         room.currentCardSender = null;
+        // เกมจบแล้ว ล้างแชทของห้องทิ้งทั้งหมด
+        room.chatMessages = [];
+        io.to(roomId).emit('chatCleared');
         return;
       }
     }
