@@ -303,27 +303,52 @@ export default function SocketHandler(req: NextApiRequest, res: NextApiResponseW
       dealAndStartGame(room);
     });
 
-    // เริ่มเกมใหม่ระหว่างที่กำลังเล่นอยู่ — เฉพาะหัวหน้าห้อง (คนแรกในห้อง)
+    // เริ่มใหม่ — เฉพาะหัวหน้าห้อง: ปิดห้องเดิม เตะทุกคนออก แล้วสร้างห้องใหม่ให้หัวหน้าห้อง
     socket.on('restartGame', ({ roomId }: { roomId: string }) => {
       const room = rooms.get(roomId);
-      if (!room || !room.gameStarted) return;
+      if (!room) return;
 
       const host = room.players[0];
       if (!host || host.id !== socket.id) {
-        socket.emit('error', 'เฉพาะหัวหน้าห้องเท่านั้นที่เริ่มเกมใหม่ได้');
+        socket.emit('error', 'เฉพาะหัวหน้าห้องเท่านั้นที่เริ่มใหม่ได้');
         return;
       }
 
-      if (room.players.length < 2) {
-        socket.emit('error', 'ต้องมีผู้เล่นอย่างน้อย 2 คน');
-        return;
-      }
+      // ล้าง timer รอกลับเข้ามาของทุกคน ห้องนี้จะไม่อยู่ให้กลับมาแล้ว
+      room.players.forEach(p => clearDisconnectTimer(roomId, p.sessionId));
 
-      dealAndStartGame(room);
-      // ส่งหลัง gameStarted เพื่อให้ข้อความ "เริ่มเกมใหม่" เป็นข้อความล่าสุดที่ทุกคนเห็น
-      io.to(roomId).emit('gameRestarted', {
-        message: `${host.name} เริ่มเกมใหม่! ล้างไพ่ทั้งหมดแล้วแจกใหม่`
+      // แจ้งคนอื่น (ยกเว้นหัวหน้าห้อง) ว่าถูกเตะออกเพราะห้องถูกปิด
+      socket.to(roomId).emit('roomClosed', {
+        message: `${host.name} ปิดห้องนี้และสร้างห้องใหม่แล้ว`
       });
+
+      // เอาทุก socket ออกจากห้องเดิมแล้วลบห้องทิ้ง
+      io.in(roomId).socketsLeave(roomId);
+      rooms.delete(roomId);
+
+      // สร้างห้องใหม่ให้หัวหน้าห้องทันที
+      const newRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+      rooms.set(newRoomId, {
+        id: newRoomId,
+        players: [{
+          id: socket.id,
+          sessionId: host.sessionId,
+          name: host.name,
+          cards: [],
+          deadCards: []
+        }],
+        gameStarted: false,
+        currentPlayer: null,
+        currentCard: null,
+        currentClaim: null,
+        currentCardSender: null,
+        deck: [],
+        chatMessages: []
+      });
+
+      socket.join(newRoomId);
+      socket.emit('roomCreated', { roomId: newRoomId, playerId: socket.id, playerName: host.name });
+      io.to(newRoomId).emit('roomUpdate', rooms.get(newRoomId));
     });
 
     // ส่งไพ่จากมือให้ผู้เล่นคนอื่น

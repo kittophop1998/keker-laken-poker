@@ -316,6 +316,13 @@ export default function GamePage() {
       saveRoom(roomId, joinedName || '');
       setCurrentRoomId(roomId);
       setPlayerId(playerId);
+      // ล้างสถานะค้างจากห้องเดิม (กรณีกด "เริ่มใหม่" ระหว่างเล่นแล้วได้ห้องใหม่)
+      setRoom(null);
+      setMyCards([]);
+      setChatMessages([]);
+      setGameLogs([]);
+      setCurrentAction(null);
+      setGameOverInfo(null);
       setGameState('waiting');
       setMessage(`สร้างห้อง ${roomId} สำเร็จ! แชร์รหัสนี้ให้เพื่อน`);
     });
@@ -370,8 +377,19 @@ export default function GamePage() {
       setSelectedPlayer(null);
     });
 
-    newSocket.on('gameRestarted', ({ message: restartMessage }) => {
-      setMessage(restartMessage);
+    // หัวหน้าห้องกด "เริ่มใหม่" → ห้องเดิมถูกปิด ทุกคน (ยกเว้นหัวหน้าห้อง) ถูกเตะกลับหน้า lobby
+    newSocket.on('roomClosed', ({ message: closedMessage }) => {
+      clearSavedRoom();
+      currentRoomIdRef.current = '';
+      setCurrentRoomId('');
+      setRoom(null);
+      setMyCards([]);
+      setChatMessages([]);
+      setGameLogs([]);
+      setCurrentAction(null);
+      setGameOverInfo(null);
+      setGameState('lobby');
+      setMessage(closedMessage);
     });
 
     newSocket.on('yourCards', (cards) => {
@@ -457,7 +475,7 @@ export default function GamePage() {
   };
 
   const restartGame = () => {
-    if (!window.confirm('เริ่มเกมใหม่เลยไหม? ไพ่ในมือและไพ่สะสมของทุกคนจะถูกล้างแล้วแจกใหม่')) return;
+    if (!window.confirm('เริ่มใหม่เลยไหม? ห้องนี้จะถูกปิด ทุกคนจะถูกเตะออก แล้วคุณจะได้ห้องใหม่พร้อมรหัสใหม่')) return;
     socketRef.current?.emit('restartGame', { roomId: currentRoomId });
   };
 
@@ -1437,7 +1455,7 @@ export default function GamePage() {
                   gap: 2,
                 }}
               >
-              {/* ── ปุ่มเริ่มเกมใหม่ (เฉพาะหัวหน้าห้อง) ── */}
+              {/* ── ปุ่มเริ่มใหม่ (เฉพาะหัวหน้าห้อง): ปิดห้องนี้ เตะทุกคนออก แล้วสร้างห้องใหม่ ── */}
               {room.players[0]?.id === playerId && (
                 <Button
                   variant="outlined"
@@ -1455,7 +1473,7 @@ export default function GamePage() {
                     },
                   }}
                 >
-                  เริ่มเกมใหม่ (แจกไพ่ใหม่ทั้งหมด)
+                  เริ่มใหม่ (สร้างห้องใหม่ เตะทุกคนออก)
                 </Button>
               )}
               <Paper
