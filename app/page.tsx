@@ -4,631 +4,438 @@ import { useRouter } from 'next/navigation';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
-import Container from '@mui/material/Container';
-import Grid from '@mui/material/Grid';
-import Paper from '@mui/material/Paper';
-import Chip from '@mui/material/Chip';
-import GroupsRoundedIcon from '@mui/icons-material/GroupsRounded';
-import TimerRoundedIcon from '@mui/icons-material/TimerRounded';
-import CakeRoundedIcon from '@mui/icons-material/CakeRounded';
-import PsychologyRoundedIcon from '@mui/icons-material/PsychologyRounded';
-import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
+
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
+import LoginRoundedIcon from '@mui/icons-material/LoginRounded';
 import StyleRoundedIcon from '@mui/icons-material/StyleRounded';
-import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
+import GpsFixedRoundedIcon from '@mui/icons-material/GpsFixedRounded';
 import SentimentVeryDissatisfiedRoundedIcon from '@mui/icons-material/SentimentVeryDissatisfiedRounded';
+import PeopleAltRoundedIcon from '@mui/icons-material/PeopleAltRounded';
+import TimerRoundedIcon from '@mui/icons-material/TimerRounded';
+import PsychologyRoundedIcon from '@mui/icons-material/PsychologyRounded';
 
-const CREATURES = [
-  { image: '/Cockroach.png', name: 'แมลงสาบ', en: 'Cockroach' },
-  { image: '/Rat.png', name: 'หนู', en: 'Rat' },
-  { image: '/Cricket.png', name: 'แมลงเขียว', en: 'Cricket' },
-  { image: '/Spider.png', name: 'แมงมุม', en: 'Spider' },
-  { image: '/Fly.png', name: 'แมลงวัน', en: 'Fly' },
-  { image: '/Bat.png', name: 'ค้างคาว', en: 'Bat' },
-  { image: '/Frog.png', name: 'กบ', en: 'Frog' },
-  { image: '/Scorpion.png', name: 'แมงป่อง', en: 'Scorpion' },
+import CreatureCard from './components/CreatureCard';
+import { CREATURES } from './lib/creatures';
+import { T } from './theme';
+
+const labelCaps = {
+  fontSize: '0.75rem',
+  fontWeight: 700,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  color: T.taupe,
+} as const;
+
+const paperCard = {
+  bgcolor: T.paper,
+  border: `2px solid ${T.stroke}`,
+  borderRadius: 'var(--r-card)',
+  boxShadow: T.shCard,
+} as const;
+
+// Four insects around the hero table, each caught mid-tell.
+const HERO_SEATS = [
+  { image: '/Cockroach.png', size: 78, top: '4%', left: '40%', delay: '0s', note: 'ซ่อนการ์ดไว้ข้างหลัง' },
+  { image: '/Spider.png', size: 62, top: '34%', left: '4%', delay: '0.7s', note: 'โน้มตัวเข้ามาจ้อง' },
+  { image: '/Fly.png', size: 58, top: '30%', left: '76%', delay: '1.2s', note: 'ถือการ์ดเต็มมือ' },
+  { image: '/Frog.png', size: 66, top: '68%', left: '30%', delay: '0.4s', note: 'ดูผิดตัวอยู่' },
 ];
 
-const STATS = [
-  { icon: GroupsRoundedIcon, label: 'ผู้เล่น', value: '2 – 6 คน', color: '#7CB342' },
-  { icon: TimerRoundedIcon, label: 'เวลาเล่น', value: '20 นาที', color: '#42A5F5' },
-  { icon: CakeRoundedIcon, label: 'อายุ', value: '8 ปีขึ้นไป', color: '#FFB74D' },
-  { icon: PsychologyRoundedIcon, label: 'ทักษะที่ใช้', value: 'หน้านิ่ง', color: '#E57373' },
-];
-
-const HOW_TO_PLAY = [
+const STEPS = [
   {
-    step: '1',
-    icon: StyleRoundedIcon,
-    color: '#7CB342',
-    title: 'ส่งการ์ด',
-    desc: 'เลือกการ์ด 1 ใบ วางคว่ำส่งให้เพื่อน แล้วบอกว่ามันคือตัวอะไร — จะพูดจริงหรือโกหกก็ได้ ขอแค่หน้านิ่งพอ',
+    n: '1',
+    Icon: StyleRoundedIcon,
+    color: T.moss,
+    title: 'วางการ์ดคว่ำ แล้วพูดอะไรก็ได้',
+    body: 'เลือกการ์ดหนึ่งใบจากมือ ส่งข้ามโต๊ะไปให้ใครสักคน แล้วประกาศว่ามันคือตัวอะไร ความจริงเป็นเรื่องของคุณคนเดียว',
+    creature: 'แมลงสาบ',
   },
   {
-    step: '2',
-    icon: VisibilityRoundedIcon,
-    color: '#42A5F5',
-    title: 'จับโกหก',
-    desc: 'เพื่อนต้องตัดสินใจว่าคุณ "พูดจริง" หรือ "โกหก" แล้วเปิดการ์ดพิสูจน์กันไปเลย',
+    n: '2',
+    Icon: GpsFixedRoundedIcon,
+    color: T.burnt,
+    title: 'อีกฝ่ายต้องเลือกว่าจะเชื่อไหม',
+    body: 'จับโกหก หรือเชื่อว่าพูดจริง ตัดสินใจแล้วเปิดการ์ดพิสูจน์กันตรงนั้น ไม่มีทางถอย',
+    creature: 'แมงมุม',
   },
   {
-    step: '3',
-    icon: SentimentVeryDissatisfiedRoundedIcon,
-    color: '#E57373',
-    title: 'รับกรรม',
-    desc: 'ฝ่ายที่แพ้ต้องเก็บการ์ดใบนั้นวางหงายหน้าตัวเอง ใครสะสมสัตว์ชนิดเดียวกันครบ 4 ใบ... แพ้คนเดียวทั้งวง',
+    n: '3',
+    Icon: SentimentVeryDissatisfiedRoundedIcon,
+    color: T.accuse,
+    title: 'ฝ่ายที่ผิดต้องเก็บการ์ดไว้กับตัว',
+    body: 'การ์ดถูกวางหงายไว้หน้าคนที่คิดผิด สะสมสัตว์ชนิดเดียวกันครบสี่ใบเมื่อไหร่ คนนั้นแพ้ทั้งวง',
+    creature: 'แมงป่อง',
   },
 ];
 
-// สัตว์ที่ลอยอยู่บนเกาะ diorama ใน hero
-const DIORAMA_PETS = [
-  { image: '/Cockroach.png', size: 92, top: '8%', left: '38%', delay: '0s' },
-  { image: '/Frog.png', size: 64, top: '32%', left: '8%', delay: '0.6s' },
-  { image: '/Spider.png', size: 60, top: '20%', left: '72%', delay: '1.1s' },
-  { image: '/Rat.png', size: 66, top: '52%', left: '66%', delay: '0.3s' },
-  { image: '/Scorpion.png', size: 56, top: '56%', left: '24%', delay: '0.9s' },
+const FACTS = [
+  { Icon: PeopleAltRoundedIcon, label: 'ผู้เล่น', value: '2 – 6 คน' },
+  { Icon: TimerRoundedIcon, label: 'ต่อเกม', value: '15 นาที' },
+  { Icon: PsychologyRoundedIcon, label: 'ทักษะที่ใช้', value: 'หน้านิ่ง' },
 ];
-
-const rise = (delay: number) => ({
-  animation: `riseIn 540ms ease-out ${delay}ms backwards`,
-});
 
 export default function Home() {
   const router = useRouter();
+  const goToGame = () => router.push('/game');
 
   return (
-    <Box sx={{ minHeight: '100dvh', bgcolor: '#FAFAFA', color: '#37474F' }}>
-      {/* ── NAV ── */}
+    <Box
+      sx={{
+        minHeight: '100dvh',
+        bgcolor: T.table,
+        color: T.charcoal,
+        backgroundImage:
+          'radial-gradient(80% 50% at 50% -5%, rgba(217,164,65,0.24) 0%, transparent 62%),' +
+          'radial-gradient(60% 45% at 0% 100%, rgba(95,122,58,0.14) 0%, transparent 60%)',
+      }}
+    >
+      {/* ─── Nav ─── */}
       <Box
         component="nav"
         sx={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          px: { xs: 3, md: 8 },
+          gap: 1.5,
+          maxWidth: 1440,
+          mx: 'auto',
+          px: 'clamp(1rem, 4vw, 2.5rem)',
           py: 2,
-          bgcolor: 'rgba(250,250,250,0.85)',
-          backdropFilter: 'blur(12px)',
-          borderBottom: '1px solid rgba(55,71,79,0.08)',
-          position: 'sticky',
-          top: 0,
-          zIndex: 100,
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/Cockroach.png" alt="" style={{ width: 34, height: 34, objectFit: 'contain' }} />
-          <Typography variant="h6" fontWeight={700} sx={{ color: '#37474F', letterSpacing: '-0.01em' }}>
-            Kaker Laken <Box component="span" sx={{ color: '#7CB342' }}>Poker</Box>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/Cockroach.png" alt="" style={{ width: 34, height: 34, objectFit: 'contain' }} />
+        <Typography sx={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 700 }}>
+          Cockroach <Box component="span" sx={{ color: T.moss }}>Table</Box>
+        </Typography>
+        <Box sx={{ flex: 1 }} />
+        <Button variant="outlined" onClick={goToGame} sx={{ py: 0.9, px: 2, fontSize: '0.88rem' }}>
+          เข้าเล่น
+        </Button>
+      </Box>
+
+      {/* ─── Hero: split, not centred ─── */}
+      <Box
+        component="header"
+        sx={{
+          maxWidth: 1440,
+          mx: 'auto',
+          px: 'clamp(1rem, 4vw, 2.5rem)',
+          pt: { xs: 3, md: 5 },
+          pb: { xs: 6, md: 9 },
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+          gap: { xs: 5, md: 4 },
+          alignItems: 'center',
+        }}
+      >
+        <Box sx={{ animation: 'placeIn 500ms var(--ease-out)' }}>
+          <Box
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 0.75,
+              px: 1.5,
+              py: 0.5,
+              mb: 2.5,
+              borderRadius: 'var(--r-pill)',
+              bgcolor: 'rgba(217,164,65,0.22)',
+              border: `2px solid ${T.mustard}`,
+            }}
+          >
+            <Typography sx={{ ...labelCaps, color: T.wood }}>เกมบลัฟบนโต๊ะไม้</Typography>
+          </Box>
+
+          <Typography
+            component="h1"
+            sx={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 'clamp(2.75rem, 6vw, 5rem)',
+              fontWeight: 700,
+              lineHeight: 1.05,
+              letterSpacing: '-0.02em',
+              mb: 2.5,
+            }}
+          >
+            โกหกให้เนียน
+            <br />
+            <Box component="span" sx={{ color: T.moss }}>จับพิรุธให้ทัน</Box>
           </Typography>
+
+          <Typography sx={{ fontSize: '1.08rem', color: T.taupe, maxWidth: 460, mb: 3.5 }}>
+            ส่งการ์ดให้เพื่อน บอกว่าจะเป็นตัวอะไรก็ได้ แต่ถ้าอีกฝ่ายจับได้ว่าคุณโกหก การ์ดใบนั้นอาจกลับมาหาคุณเอง
+          </Typography>
+
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mb: 3.5 }}>
+            <Button variant="contained" startIcon={<PlayArrowRoundedIcon />} onClick={goToGame} sx={{ fontSize: '1.05rem' }}>
+              สร้างห้องเกม
+            </Button>
+            <Button variant="outlined" startIcon={<LoginRoundedIcon />} onClick={goToGame} sx={{ fontSize: '1.05rem' }}>
+              เข้าร่วมห้อง
+            </Button>
+          </Box>
+
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: { xs: 2, sm: 3 } }}>
+            {FACTS.map(({ Icon, label, value }) => (
+              <Box key={label} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Icon sx={{ fontSize: 19, color: T.wood }} />
+                <Box>
+                  <Typography sx={{ ...labelCaps, lineHeight: 1.3 }}>{label}</Typography>
+                  <Typography sx={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '0.92rem' }}>
+                    {value}
+                  </Typography>
+                </Box>
+              </Box>
+            ))}
+          </Box>
         </Box>
-        <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 4, alignItems: 'center' }}>
-          {[
-            { t: 'เกี่ยวกับเกม', href: '#about' },
-            { t: 'วิธีเล่น', href: '#how-to-play' },
-            { t: 'การ์ดทั้งหมด', href: '#gallery' },
-          ].map((item) => (
-            <Typography
-              key={item.t}
-              component="a"
-              href={item.href}
-              variant="body2"
-              fontWeight={500}
+
+        {/* ─── Miniature table, three-quarter view ─── */}
+        <Box
+          aria-hidden
+          sx={{
+            position: 'relative',
+            aspectRatio: '1 / 0.92',
+            minHeight: { xs: 320, md: 420 },
+            animation: 'placeIn 620ms var(--ease-out) 120ms backwards',
+          }}
+        >
+          {/* Blurred diorama backdrop — scenery stays soft, pieces stay sharp */}
+          <Box
+            sx={{
+              position: 'absolute',
+              inset: '-6%',
+              borderRadius: '50%',
+              filter: 'blur(28px)',
+              background:
+                'radial-gradient(circle at 50% 40%, rgba(217,164,65,0.35) 0%, rgba(123,90,62,0.22) 45%, transparent 72%)',
+            }}
+          />
+
+          {/* The table itself, tilted back */}
+          <Box
+            className="wood"
+            sx={{
+              position: 'absolute',
+              inset: '16% 6% 12% 6%',
+              borderRadius: '46% 46% 38% 38% / 30% 30% 24% 24%',
+              border: `3px solid ${T.woodDark}`,
+              boxShadow: 'var(--sh-inset), 0 26px 44px rgba(48,46,40,0.3)',
+              transform: 'rotateX(12deg)',
+            }}
+          >
+            <Box
               sx={{
-                color: '#78909C',
-                cursor: 'pointer',
-                '&:hover': { color: '#7CB342' },
-                transition: 'color 200ms',
+                position: 'absolute',
+                inset: 14,
+                borderRadius: 'inherit',
+                border: '2px solid rgba(255,249,238,0.16)',
+              }}
+            />
+          </Box>
+
+          {/* Facedown card at the centre, under a warm spotlight */}
+          <Box
+            sx={{
+              position: 'absolute',
+              top: '44%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 3,
+            }}
+          >
+            <Box
+              sx={{
+                position: 'absolute',
+                inset: '-90% -120%',
+                background: 'radial-gradient(circle, rgba(255,240,200,0.5) 0%, transparent 68%)',
+                pointerEvents: 'none',
+              }}
+            />
+            <Box sx={{ position: 'relative', animation: 'bob 4s ease-in-out infinite' }}>
+              <CreatureCard creature="แมลงสาบ" size="md" faceDown tilt={-5} />
+            </Box>
+          </Box>
+
+          {/* Four seated insects */}
+          {HERO_SEATS.map((s) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={s.image}
+              src={s.image}
+              alt=""
+              style={{
+                position: 'absolute',
+                top: s.top,
+                left: s.left,
+                width: s.size,
+                height: s.size,
+                objectFit: 'contain',
+                zIndex: 4,
+                filter: 'drop-shadow(0 10px 8px rgba(48,46,40,0.3))',
+                animation: `bob 3.6s ease-in-out ${s.delay} infinite`,
+              }}
+            />
+          ))}
+        </Box>
+      </Box>
+
+      {/* ─── How to play: zig-zag, never three equal columns ─── */}
+      <Box component="section" sx={{ maxWidth: 1100, mx: 'auto', px: 'clamp(1rem, 4vw, 2.5rem)', py: { xs: 5, md: 8 } }}>
+        <Typography sx={{ ...labelCaps, textAlign: 'center', display: 'block', mb: 1 }}>วิธีเล่น</Typography>
+        <Typography
+          component="h2"
+          sx={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 'clamp(1.75rem, 4vw, 2.5rem)',
+            fontWeight: 700,
+            textAlign: 'center',
+            mb: { xs: 4, md: 7 },
+          }}
+        >
+          สามจังหวะ จบใน 15 นาที
+        </Typography>
+
+        {STEPS.map((s, i) => {
+          const flipped = i % 2 === 1;
+          return (
+            <Box
+              key={s.n}
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                gap: { xs: 2.5, md: 5 },
+                alignItems: 'center',
+                mb: { xs: 4, md: 6 },
               }}
             >
-              {item.t}
-            </Typography>
+              <Box
+                className="grain"
+                sx={{
+                  ...paperCard,
+                  p: { xs: 2.5, md: 3.5 },
+                  order: { xs: 2, md: flipped ? 2 : 1 },
+                  transform: `rotate(${flipped ? 1.2 : -1.2}deg)`,
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1.5 }}>
+                  <Box
+                    sx={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: '50%',
+                      bgcolor: s.color,
+                      color: T.paper,
+                      display: 'grid',
+                      placeItems: 'center',
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: 700,
+                      boxShadow: `0 4px 0 rgba(48,46,40,0.25)`,
+                    }}
+                  >
+                    {s.n}
+                  </Box>
+                  <s.Icon sx={{ fontSize: 22, color: s.color }} />
+                </Box>
+                <Typography
+                  sx={{ fontFamily: 'var(--font-display)', fontSize: '1.35rem', fontWeight: 700, mb: 1 }}
+                >
+                  {s.title}
+                </Typography>
+                <Typography sx={{ color: T.taupe }}>{s.body}</Typography>
+              </Box>
+
+              <Box
+                sx={{
+                  order: { xs: 1, md: flipped ? 1 : 2 },
+                  display: 'grid',
+                  placeItems: 'center',
+                }}
+              >
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <CreatureCard creature={s.creature} size="md" faceDown tilt={-6} />
+                  <Box sx={{ mt: 2 }}>
+                    <CreatureCard creature={s.creature} size="md" tilt={5} />
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+          );
+        })}
+      </Box>
+
+      {/* ─── The deck ─── */}
+      <Box component="section" sx={{ maxWidth: 1100, mx: 'auto', px: 'clamp(1rem, 4vw, 2.5rem)', pb: { xs: 6, md: 9 } }}>
+        <Typography sx={{ ...labelCaps, textAlign: 'center', display: 'block', mb: 1 }}>สำรับ</Typography>
+        <Typography
+          component="h2"
+          sx={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 'clamp(1.75rem, 4vw, 2.5rem)',
+            fontWeight: 700,
+            textAlign: 'center',
+            mb: 1,
+          }}
+        >
+          แปดชนิด ชนิดละแปดใบ
+        </Typography>
+        <Typography sx={{ textAlign: 'center', color: T.taupe, mb: 4 }}>
+          รวม 64 ใบ แจกให้ทุกคนเท่า ๆ กันตอนเริ่มเกม
+        </Typography>
+
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, justifyContent: 'center' }}>
+          {CREATURES.map((c, i) => (
+            <CreatureCard key={c.name} creature={c.name} size="md" tilt={((i % 5) - 2) * 2} />
           ))}
-          <Button variant="contained" size="small" onClick={() => router.push('/game')} sx={{ px: 3, py: 1 }}>
-            เล่นเลย
+        </Box>
+      </Box>
+
+      {/* ─── Closing call ─── */}
+      <Box component="section" sx={{ maxWidth: 780, mx: 'auto', px: 'clamp(1rem, 4vw, 2.5rem)', pb: { xs: 6, md: 9 } }}>
+        <Box
+          className="grain"
+          sx={{
+            ...paperCard,
+            p: { xs: 3, md: 5 },
+            textAlign: 'center',
+            boxShadow: T.shRaised,
+            position: 'relative',
+            overflow: 'visible',
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/Rat.png"
+            alt=""
+            style={{
+              position: 'absolute',
+              top: -32,
+              left: 28,
+              width: 60,
+              height: 60,
+              objectFit: 'contain',
+              animation: 'bob 3.2s ease-in-out infinite',
+              filter: 'drop-shadow(0 8px 6px rgba(48,46,40,0.25))',
+            }}
+          />
+          <Typography
+            component="h2"
+            sx={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(1.6rem, 4vw, 2.25rem)', fontWeight: 700, mb: 1.5 }}
+          >
+            ชวนเพื่อนมานั่งโต๊ะเดียวกัน
+          </Typography>
+          <Typography sx={{ color: T.taupe, mb: 3 }}>
+            สร้างห้อง ส่งรหัสสี่ตัวให้เพื่อน แล้วดูว่าใครหน้านิ่งกว่ากัน
+          </Typography>
+          <Button variant="contained" startIcon={<PlayArrowRoundedIcon />} onClick={goToGame} sx={{ fontSize: '1.05rem' }}>
+            เริ่มเลย
           </Button>
         </Box>
       </Box>
 
-      {/* ── HERO: split-screen, text left / diorama right ── */}
-      <Box
-        sx={{
-          position: 'relative',
-          overflow: 'hidden',
-          background: 'linear-gradient(180deg, #DCEFFB 0%, #EAF5E3 70%, #FAFAFA 100%)',
-          py: { xs: 8, md: 12 },
-          px: { xs: 3, md: 8 },
-        }}
-      >
-        {/* tilt-shift blur bands (top & bottom edges) */}
-        <Box
-          sx={{
-            position: 'absolute',
-            inset: '0 0 auto 0',
-            height: 70,
-            backdropFilter: 'blur(3px)',
-            maskImage: 'linear-gradient(to bottom, black, transparent)',
-            pointerEvents: 'none',
-            zIndex: 2,
-          }}
-        />
-        <Box
-          sx={{
-            position: 'absolute',
-            inset: 'auto 0 0 0',
-            height: 70,
-            backdropFilter: 'blur(3px)',
-            maskImage: 'linear-gradient(to top, black, transparent)',
-            pointerEvents: 'none',
-            zIndex: 2,
-          }}
-        />
-
-        <Container maxWidth="lg">
-          <Grid container spacing={{ xs: 6, md: 8 }} alignItems="center">
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Chip
-                label="บอร์ดเกมทำลายมิตรภาพ ฉบับออนไลน์"
-                size="small"
-                sx={{
-                  mb: 3,
-                  bgcolor: 'rgba(124,179,66,0.15)',
-                  color: '#558B2F',
-                  ...rise(0),
-                }}
-              />
-              <Typography
-                variant="h1"
-                sx={{
-                  fontSize: 'clamp(2.5rem, 5vw, 4rem)',
-                  fontWeight: 700,
-                  lineHeight: 1.1,
-                  mb: 3,
-                  ...rise(120),
-                }}
-              >
-                โกหกให้เนียน{' '}
-                <Box component="span" sx={{ color: '#7CB342' }}>
-                  ในโลกจิ๋ว
-                </Box>{' '}
-                ของเหล่าสัตว์กวนใจ
-              </Typography>
-              <Typography
-                variant="body1"
-                sx={{ color: '#78909C', fontSize: '1.1rem', lineHeight: 1.6, mb: 4, maxWidth: '46ch', ...rise(240) }}
-              >
-                Kaker Laken Poker คือเกมการ์ดจับโกหกสุดป่วน ส่งการ์ดสัตว์น่ารังเกียจให้เพื่อนพร้อมคำโกหกหน้าตาย
-                ใครโดนจับได้ (หรือจับพลาด) ก็รับสัตว์ไปสะสม — ครบ 4 ตัวเมื่อไหร่ แพ้ทันที
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', ...rise(360) }}>
-                <Button
-                  variant="contained"
-                  size="large"
-                  startIcon={<PlayArrowRoundedIcon />}
-                  onClick={() => router.push('/game')}
-                  sx={{ px: 5, py: 1.6, fontSize: '1.05rem' }}
-                >
-                  เริ่มเล่นตอนนี้
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="large"
-                  href="#how-to-play"
-                  sx={{
-                    px: 4,
-                    py: 1.6,
-                    fontSize: '1.05rem',
-                    borderColor: 'rgba(55,71,79,0.25)',
-                    color: '#37474F',
-                    '&:hover': { borderColor: '#7CB342', bgcolor: 'rgba(124,179,66,0.06)' },
-                  }}
-                >
-                  ดูวิธีเล่นก่อน
-                </Button>
-              </Box>
-            </Grid>
-
-            {/* diorama island */}
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Box
-                sx={{
-                  position: 'relative',
-                  height: { xs: 320, md: 420 },
-                  ...rise(200),
-                }}
-              >
-                {/* dirt layer (thickness of the island) */}
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    bottom: '4%',
-                    left: '50%',
-                    transform: 'translateX(-50%) rotate(45deg) scaleY(0.55)',
-                    transformOrigin: 'center',
-                    width: { xs: 230, md: 300 },
-                    height: { xs: 230, md: 300 },
-                    borderRadius: '2rem',
-                    bgcolor: '#8D6E63',
-                    boxShadow: '0 24px 48px rgba(93,64,55,0.35)',
-                  }}
-                />
-                {/* grass top */}
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    bottom: '9%',
-                    left: '50%',
-                    transform: 'translateX(-50%) rotate(45deg) scaleY(0.55)',
-                    transformOrigin: 'center',
-                    width: { xs: 230, md: 300 },
-                    height: { xs: 230, md: 300 },
-                    borderRadius: '2rem',
-                    background: 'linear-gradient(135deg, #9CCC65 0%, #7CB342 100%)',
-                    border: '4px solid #FAFAFA',
-                  }}
-                />
-                {/* pond on the island */}
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    bottom: '22%',
-                    left: '58%',
-                    width: { xs: 60, md: 84 },
-                    height: { xs: 34, md: 46 },
-                    borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #4FC3F7, #29B6F6)',
-                    border: '3px solid #FAFAFA',
-                    opacity: 0.95,
-                  }}
-                />
-                {/* floating animals with their own shadows */}
-                {DIORAMA_PETS.map((pet) => (
-                  <Box key={pet.image} sx={{ position: 'absolute', top: pet.top, left: pet.left, zIndex: 1 }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={pet.image}
-                      alt=""
-                      style={{
-                        width: pet.size,
-                        height: pet.size,
-                        objectFit: 'contain',
-                        animation: `bob 3.2s ease-in-out ${pet.delay} infinite`,
-                        filter: 'drop-shadow(0 12px 10px rgba(55,71,79,0.25))',
-                        display: 'block',
-                      }}
-                    />
-                  </Box>
-                ))}
-                {/* floating claim card */}
-                <Paper
-                  elevation={0}
-                  sx={{
-                    position: 'absolute',
-                    top: '2%',
-                    left: '4%',
-                    px: 2,
-                    py: 1,
-                    borderRadius: '1rem',
-                    transform: 'rotate(-6deg)',
-                    animation: 'bob 4s ease-in-out 0.4s infinite',
-                    boxShadow: '0 8px 24px rgba(55,71,79,0.15)',
-                  }}
-                >
-                  <Typography variant="body2" fontWeight={600} sx={{ color: '#37474F' }}>
-                    &quot;นี่แมงป่องนะ เชื่อดิ&quot;
-                  </Typography>
-                </Paper>
-                <Paper
-                  elevation={0}
-                  sx={{
-                    position: 'absolute',
-                    bottom: '6%',
-                    right: '2%',
-                    px: 2,
-                    py: 1,
-                    borderRadius: '1rem',
-                    transform: 'rotate(4deg)',
-                    animation: 'bob 3.6s ease-in-out 1.4s infinite',
-                    bgcolor: '#E57373',
-                    border: 'none',
-                    boxShadow: '0 8px 24px rgba(229,115,115,0.35)',
-                  }}
-                >
-                  <Typography variant="body2" fontWeight={600} sx={{ color: '#fff' }}>
-                    โกหก!
-                  </Typography>
-                </Paper>
-              </Box>
-            </Grid>
-          </Grid>
-        </Container>
-      </Box>
-
-      {/* ── STATS BAR ── */}
-      <Container maxWidth="lg" sx={{ px: 3, mt: { xs: -2, md: -4 }, position: 'relative', zIndex: 3 }}>
-        <Paper elevation={0} sx={{ p: { xs: 3, md: 4 } }}>
-          <Grid container spacing={3}>
-            {STATS.map((s, i) => (
-              <Grid key={s.label} size={{ xs: 6, md: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, ...rise(i * 120) }}>
-                  <Box
-                    sx={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: '1rem',
-                      bgcolor: `${s.color}22`,
-                      color: s.color,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <s.icon />
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" fontWeight={500} sx={{ color: '#9E9E9E', textTransform: 'uppercase' }}>
-                      {s.label}
-                    </Typography>
-                    <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.2 }}>
-                      {s.value}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Grid>
-            ))}
-          </Grid>
-        </Paper>
-      </Container>
-
-      {/* ── ABOUT (zig-zag row 1: text left, visual right) ── */}
-      <Box id="about" sx={{ py: 'clamp(4rem, 8vw, 8rem)', px: 3 }}>
-        <Container maxWidth="lg">
-          <Grid container spacing={{ xs: 6, md: 10 }} alignItems="center">
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Typography variant="overline" fontWeight={500} sx={{ color: '#7CB342', letterSpacing: 2 }}>
-                เกี่ยวกับเกม
-              </Typography>
-              <Typography variant="h3" fontWeight={700} sx={{ mb: 3, mt: 1 }}>
-                เกมที่ทดสอบ &quot;หน้าตาย&quot; ของคุณ
-              </Typography>
-              <Typography variant="body1" sx={{ color: '#78909C', lineHeight: 1.8, mb: 4 }}>
-                Kaker Laken Poker ไม่ใช่เกมการ์ดธรรมดา เป้าหมายคือส่งต่อการ์ดสัตว์สุดน่ารังเกียจให้เพื่อน
-                แล้วหลอกให้เชื่อว่ามันคือตัวอะไรสักตัว ใครพลาดท่าสะสมสัตว์ชนิดเดียวกันครบ 4 ใบ
-                หรือการ์ดในมือหมดก่อน... คนนั้นแพ้คนเดียวแบบเจ็บจี๊ด
-              </Typography>
-              {[
-                'เล่นง่าย เข้าใจกติกาได้ใน 2 นาที',
-                'เน้นการอ่านใจ อ่านหน้า และการโกหกอย่างมีศิลปะ',
-                'เล่นออนไลน์กับเพื่อนได้ทันที ไม่ต้องดาวน์โหลด',
-              ].map((item) => (
-                <Box key={item} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
-                  <CheckCircleRoundedIcon sx={{ color: '#7CB342', fontSize: 22 }} />
-                  <Typography variant="body1">{item}</Typography>
-                </Box>
-              ))}
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Grid container spacing={3}>
-                {[
-                  { image: '/Cockroach.png', name: 'แมลงสาบ', tag: 'ตัวการ์ตูนนำแห่งเกม', color: '#7CB342' },
-                  { image: '/Bat.png', name: 'ค้างคาว', tag: 'มาเป็นกองหนุน', color: '#42A5F5' },
-                ].map((c, i) => (
-                  <Grid key={c.name} size={6}>
-                    <Paper
-                      elevation={0}
-                      sx={{
-                        height: 240,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 1.5,
-                        mt: i === 1 ? 5 : 0,
-                        borderBottom: `4px solid ${c.color}`,
-                        transition: 'transform 200ms var(--spring), box-shadow 200ms ease',
-                        '&:hover': {
-                          transform: 'scale(1.03)',
-                          boxShadow: '0 12px 32px rgba(55,71,79,0.12)',
-                        },
-                      }}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={c.image} alt={c.name} style={{ width: 88, height: 88, objectFit: 'contain' }} />
-                      <Box textAlign="center">
-                        <Typography fontWeight={700}>{c.name}</Typography>
-                        <Typography variant="caption" sx={{ color: '#9E9E9E' }}>
-                          {c.tag}
-                        </Typography>
-                      </Box>
-                    </Paper>
-                  </Grid>
-                ))}
-              </Grid>
-            </Grid>
-          </Grid>
-        </Container>
-      </Box>
-
-      {/* ── HOW TO PLAY (zig-zag alternating rows) ── */}
-      <Box id="how-to-play" sx={{ bgcolor: '#F1F8E9', py: 'clamp(4rem, 8vw, 8rem)', px: 3 }}>
-        <Container maxWidth="md">
-          <Typography variant="overline" fontWeight={500} textAlign="center" display="block" sx={{ color: '#7CB342', letterSpacing: 2 }}>
-            กติกา
-          </Typography>
-          <Typography variant="h3" fontWeight={700} textAlign="center" sx={{ mb: 8, mt: 1 }}>
-            เล่นยังไงให้เพื่อนเกลียด
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            {HOW_TO_PLAY.map((h, i) => (
-              <Paper
-                key={h.step}
-                elevation={0}
-                sx={{
-                  display: 'flex',
-                  flexDirection: { xs: 'column', sm: i % 2 === 0 ? 'row' : 'row-reverse' },
-                  alignItems: 'center',
-                  gap: { xs: 2, sm: 4 },
-                  p: { xs: 3, md: 4 },
-                  transition: 'transform 200ms var(--spring), box-shadow 200ms ease',
-                  '&:hover': { transform: 'scale(1.02)', boxShadow: '0 12px 32px rgba(55,71,79,0.1)' },
-                }}
-              >
-                <Box
-                  sx={{
-                    width: 88,
-                    height: 88,
-                    borderRadius: '1.5rem',
-                    bgcolor: `${h.color}1E`,
-                    color: h.color,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    position: 'relative',
-                  }}
-                >
-                  <h.icon sx={{ fontSize: 40 }} />
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      top: -10,
-                      right: -10,
-                      width: 30,
-                      height: 30,
-                      borderRadius: '50%',
-                      bgcolor: h.color,
-                      color: '#fff',
-                      fontWeight: 700,
-                      fontSize: '0.9rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {h.step}
-                  </Box>
-                </Box>
-                <Box sx={{ textAlign: { xs: 'center', sm: i % 2 === 0 ? 'left' : 'right' } }}>
-                  <Typography variant="h5" fontWeight={700} sx={{ mb: 1 }}>
-                    {h.title}
-                  </Typography>
-                  <Typography variant="body1" sx={{ color: '#78909C', lineHeight: 1.7 }}>
-                    {h.desc}
-                  </Typography>
-                </Box>
-              </Paper>
-            ))}
-          </Box>
-        </Container>
-      </Box>
-
-      {/* ── CREATURES GALLERY ── */}
-      <Box id="gallery" sx={{ py: 'clamp(4rem, 8vw, 8rem)', px: 3 }}>
-        <Container maxWidth="lg">
-          <Typography variant="overline" fontWeight={500} textAlign="center" display="block" sx={{ color: '#42A5F5', letterSpacing: 2 }}>
-            การ์ดทั้งหมด
-          </Typography>
-          <Typography variant="h3" fontWeight={700} textAlign="center" sx={{ mb: 8, mt: 1 }}>
-            เหล่าสัตว์ประจำสำรับ
-          </Typography>
-          <Grid container spacing={3} justifyContent="center">
-            {CREATURES.map((c, i) => (
-              <Grid key={c.name} size={{ xs: 6, sm: 3 }}>
-                <Paper
-                  elevation={0}
-                  sx={{
-                    py: 4,
-                    px: 2,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 1.5,
-                    cursor: 'default',
-                    transition: 'transform 200ms var(--spring), box-shadow 200ms ease',
-                    '&:hover': {
-                      transform: 'scale(1.03) translateY(-4px)',
-                      boxShadow: '0 16px 32px rgba(55,71,79,0.12)',
-                      '& img': { animation: 'wobble 0.5s ease-in-out infinite' },
-                    },
-                    ...rise(i * 80),
-                  }}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={c.image} alt={c.name} style={{ width: 72, height: 72, objectFit: 'contain' }} />
-                  <Box textAlign="center">
-                    <Typography fontWeight={700}>{c.name}</Typography>
-                    <Typography variant="caption" sx={{ color: '#9E9E9E', textTransform: 'uppercase', letterSpacing: 1 }}>
-                      {c.en}
-                    </Typography>
-                  </Box>
-                </Paper>
-              </Grid>
-            ))}
-          </Grid>
-
-          {/* CTA */}
-          <Paper
-            elevation={0}
-            sx={{
-              mt: 10,
-              p: { xs: 4, md: 8 },
-              textAlign: 'center',
-              background: 'linear-gradient(135deg, #7CB342 0%, #689F38 100%)',
-              border: 'none',
-              position: 'relative',
-              overflow: 'hidden',
-            }}
-          >
-            <Typography variant="h4" fontWeight={700} sx={{ mb: 1.5, color: '#fff' }}>
-              พร้อมจะโกหกเพื่อนหรือยัง?
-            </Typography>
-            <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.85)', mb: 4 }}>
-              สร้างห้อง แชร์รหัสให้เพื่อน แล้วเริ่มทำลายมิตรภาพกันได้เลย
-            </Typography>
-            <Button
-              variant="contained"
-              size="large"
-              startIcon={<PlayArrowRoundedIcon />}
-              onClick={() => router.push('/game')}
-              sx={{
-                px: 6,
-                py: 1.8,
-                fontSize: '1.1rem',
-                bgcolor: '#FAFAFA',
-                color: '#558B2F',
-                '&:hover': { bgcolor: '#fff', transform: 'translateY(-2px)', boxShadow: '0 8px 24px rgba(0,0,0,0.15)' },
-              }}
-            >
-              เข้าห้องเกมเลย
-            </Button>
-          </Paper>
-        </Container>
-      </Box>
-
-      {/* ── FOOTER ── */}
-      <Box component="footer" sx={{ bgcolor: '#37474F', color: '#CFD8DC', py: 6, px: 3 }}>
-        <Container maxWidth="lg">
-          <Grid container spacing={4} alignItems="center" justifyContent="space-between">
-            <Grid size={{ xs: 12, md: 'auto' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/Cockroach.png" alt="" style={{ width: 28, height: 28, objectFit: 'contain' }} />
-                <Typography variant="h6" fontWeight={700} sx={{ color: '#fff' }}>
-                  Kaker Laken Poker
-                </Typography>
-              </Box>
-              <Typography variant="caption" sx={{ color: '#90A4AE' }}>
-                ออกแบบมาเพื่อความสนุกและการโกหกอย่างสร้างสรรค์
-              </Typography>
-            </Grid>
-            <Grid size={{ xs: 12, md: 'auto' }}>
-              <Typography variant="caption" sx={{ color: '#78909C' }}>
-                © 2026 Drei Magier Spiele. All rights reserved.
-              </Typography>
-            </Grid>
-          </Grid>
-        </Container>
+      <Box component="footer" sx={{ borderTop: `2px solid ${T.stroke}`, py: 3 }}>
+        <Typography sx={{ textAlign: 'center', color: T.taupe, fontSize: '0.82rem' }}>
+          Cockroach Table — เกมบลัฟสำหรับคนที่ยังอยากคบกันต่อ
+        </Typography>
       </Box>
     </Box>
   );

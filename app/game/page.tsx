@@ -3,38 +3,41 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-// MUI imports
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import Paper from '@mui/material/Paper';
-import Chip from '@mui/material/Chip';
-import Divider from '@mui/material/Divider';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import Switch from '@mui/material/Switch';
-import CircularProgress from '@mui/material/CircularProgress';
-import Alert from '@mui/material/Alert';
-import Tooltip from '@mui/material/Tooltip';
 import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
+import Dialog from '@mui/material/Dialog';
 
-// Icons (DESIGN.md: no emojis in UI)
 import CasinoRoundedIcon from '@mui/icons-material/CasinoRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
-import SendRoundedIcon from '@mui/icons-material/SendRounded';
-import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
-import TheaterComedyRoundedIcon from '@mui/icons-material/TheaterComedyRounded';
-import RadarRoundedIcon from '@mui/icons-material/RadarRounded';
-import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
-import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
+import SendRoundedIcon from '@mui/icons-material/SendRounded';
+import GpsFixedRoundedIcon from '@mui/icons-material/GpsFixedRounded';
+import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import GroupAddRoundedIcon from '@mui/icons-material/GroupAddRounded';
+import LoginRoundedIcon from '@mui/icons-material/LoginRounded';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
-import StarRoundedIcon from '@mui/icons-material/StarRounded';
-import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
-import StyleRoundedIcon from '@mui/icons-material/StyleRounded';
-import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
+import MenuBookRoundedIcon from '@mui/icons-material/MenuBookRounded';
+import RadarRoundedIcon from '@mui/icons-material/RadarRounded';
+import TheaterComedyRoundedIcon from '@mui/icons-material/TheaterComedyRounded';
+import PeopleAltRoundedIcon from '@mui/icons-material/PeopleAltRounded';
+import SortRoundedIcon from '@mui/icons-material/SortRounded';
+import HourglassEmptyRoundedIcon from '@mui/icons-material/HourglassEmptyRounded';
+
+import CreatureCard from '../components/CreatureCard';
+import PlayerToken from '../components/PlayerToken';
+import GameLog, { LogEntry } from '../components/GameLog';
+import ChatPanel, { ChatMessage } from '../components/ChatPanel';
+import CreatureSelector from '../components/CreatureSelector';
+import { CREATURE_NAMES, creatureImage, getCreature } from '../lib/creatures';
+import { T, playerColor } from '../theme';
+
+// ─── Wire types (must match pages/api/socketio.ts) ──────────────────────────
 
 interface Card {
   animal: string;
@@ -64,25 +67,12 @@ interface CurrentAction {
   claim: string;
 }
 
-interface GameLog {
-  id: number;
-  type: 'receive' | 'send' | 'challenge' | 'gameOver' | 'emote';
+interface Reveal {
+  actualAnimal: string;
+  claimedAnimal: string;
+  guessCorrect: boolean;
+  loserName: string;
   message: string;
-  timestamp: Date;
-}
-
-interface EmoteBubble {
-  id: number;
-  from: string;
-  text: string;
-}
-
-interface ChatMessage {
-  id: string;
-  from: string;
-  fromId: string;
-  text: string;
-  timestamp: number;
 }
 
 interface GameOverInfo {
@@ -91,85 +81,60 @@ interface GameOverInfo {
   title: string;
 }
 
-const LOG_COLORS: Record<GameLog['type'], string> = {
-  receive: '#42A5F5',
-  send: '#7CB342',
-  challenge: '#FFB74D',
-  gameOver: '#E57373',
-  emote: '#8D6E63',
-};
+// ─── Flavor ────────────────────────────────────────────────────────────────
 
-// ── ของกวนๆ ทั้งหลาย ──────────────────────────────────────────
 const FUNNY_NAMES = [
-  'เจ้าพ่อแมลงสาบ',
-  'แม่มดหน้านิ่ง',
-  'โกหกไม่เป็น(มั้ง)',
-  'สายตรวจแมงมุม',
-  'กบยิ้มยาก',
-  'หนูไม่ได้โกง',
-  'ค้างคาวกลางวัน',
-  'เซียนบลัฟตัวพ่อ',
-  'แมงป่องเจ้าเล่ห์',
-  'นายจับเท็จ',
-  'คุณชายหน้าตาย',
-  'ป้าข้างบ้านรู้หมด',
+  'เจ้าพ่อแมลงสาบ', 'แม่มดหน้านิ่ง', 'โกหกไม่เป็น(มั้ง)', 'สายตรวจแมงมุม',
+  'กบยิ้มยาก', 'หนูไม่ได้โกง', 'ค้างคาวกลางวัน', 'เซียนบลัฟตัวพ่อ',
+  'แมงป่องเจ้าเล่ห์', 'นายจับเท็จ', 'คุณชายหน้าตาย', 'ป้าข้างบ้านรู้หมด',
 ];
 
 const TAUNTS = [
-  'หน้าตายมากพี่',
-  'โกหกชัวร์ 100%',
-  'อย่าหลอกกันดิ๊',
-  'ตาสั่นแล้วนะ',
-  'เชื่อก็บ้าแล้ว',
-  'ส่งมาเลย ไม่กลัว',
-  'แมลงสาบอีกแล้วเหรอ',
-  'คิดนานจัง เปิดโพยอยู่ป่ะ',
+  'หน้าตายมากพี่', 'โกหกชัวร์ 100%', 'อย่าหลอกกันดิ๊', 'ตาสั่นแล้วนะ',
+  'เชื่อก็บ้าแล้ว', 'ส่งมาเลย ไม่กลัว', 'แมลงสาบอีกแล้วเหรอ', 'คิดนานจัง เปิดโพยอยู่ป่ะ',
 ];
 
 const LIAR_QUOTES = [
-  'เคล็ดลับ: โกหกสลับพูดจริง เพื่อนจะงงจนเลิกคบ',
-  'ผู้เชี่ยวชาญบอกว่าการจ้องตาช่วยจับโกหกได้... หรือแค่ทำให้เขิน',
+  'เคล็ดลับ โกหกสลับพูดจริง เพื่อนจะงงจนเลิกคบ',
+  'ผู้เชี่ยวชาญบอกว่าการจ้องตาช่วยจับโกหกได้ หรือแค่ทำให้เขิน',
   'แมลงสาบไม่เคยทำร้ายใคร นอกจากมิตรภาพของคุณ',
-  'อย่าเชื่อคนที่พูดว่า "เชื่อผมดิ"',
+  'อย่าเชื่อคนที่พูดว่า เชื่อผมดิ',
   'หน้านิ่งไม่ใช่พรสวรรค์ แต่คือการฝึกฝน',
-  'ถ้าเพื่อนยิ้มแปลว่าโกหก ถ้าหน้านิ่ง...ก็โกหกเหมือนกัน',
 ];
 
 const LOSER_TITLES = [
-  'ราชาแมลงสาบแห่งปี',
-  'นักสะสมตัวยง (แบบไม่ตั้งใจ)',
-  'ตำนานคนโดนหลอก',
-  'ผู้พิทักษ์สวนสัตว์จำเป็น',
-  'เจ้าของฟาร์มคนใหม่',
-  'หน้าไม่นิ่งจนโดนอ่านขาด',
+  'ราชาแมลงสาบแห่งปี', 'นักสะสมตัวยง (แบบไม่ตั้งใจ)', 'ตำนานคนโดนหลอก',
+  'ผู้พิทักษ์สวนสัตว์จำเป็น', 'เจ้าของฟาร์มคนใหม่', 'หน้าไม่นิ่งจนโดนอ่านขาด',
 ];
 
 const DETECTOR_VERDICTS = [
-  'โกหกแน่นอน... มั้ง',
+  'โกหกแน่นอน มั้ง',
   'พูดจริง 51% โกหก 49%',
   'เครื่องขอไม่ฟันธง',
-  'ตรวจพบนิ้วสั่นขณะส่งการ์ด: น่าจะโกหก',
-  'หน้าซื่อขนาดนี้... จริงแหละ (หรือเปล่า)',
-  'ERROR 418: ความกวนเกินขีดจำกัด',
+  'ตรวจพบนิ้วสั่นขณะส่งการ์ด น่าจะโกหก',
+  'หน้าซื่อขนาดนี้ จริงแหละ (หรือเปล่า)',
+  'ERROR 418 ความกวนเกินขีดจำกัด',
 ];
 
-const randomOf = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+const randomOf = <V,>(arr: V[]): V => arr[Math.floor(Math.random() * arr.length)];
 
-// ── จำตัวตนผู้เล่นไว้ใน localStorage เพื่อให้กลับเข้าห้องเดิมได้หลังหลุด/ปิดเว็บ ──
+// ─── Persisted identity, so a refresh or a dropped socket returns to the seat ──
+
 const SESSION_KEY = 'klp_session_id';
 const LAST_ROOM_KEY = 'klp_last_room';
-const LAST_ROOM_TTL_MS = 3 * 60 * 60 * 1000; // จำห้องล่าสุดไว้ 3 ชั่วโมง
+const LAST_ROOM_TTL_MS = 3 * 60 * 60 * 1000;
 
 function getSessionId(): string {
+  const make = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   try {
     let id = localStorage.getItem(SESSION_KEY);
     if (!id) {
-      id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      id = make();
       localStorage.setItem(SESSION_KEY, id);
     }
     return id;
   } catch {
-    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    return make();
   }
 }
 
@@ -200,319 +165,336 @@ function clearSavedRoom() {
   } catch {}
 }
 
+// ─── Shared surfaces ───────────────────────────────────────────────────────
+
+const paperCard = {
+  bgcolor: T.paper,
+  border: `2px solid ${T.stroke}`,
+  borderRadius: 'var(--r-card)',
+  boxShadow: T.shCard,
+} as const;
+
+const srOnly = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+} as const;
+
+const labelCaps = {
+  fontSize: '0.75rem',
+  fontWeight: 700,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  color: T.taupe,
+} as const;
+
 export default function GamePage() {
   const socketRef = useRef<Socket | null>(null);
+
   const [playerName, setPlayerName] = useState('');
-  const [roomId, setRoomId] = useState('');
+  const [roomInput, setRoomInput] = useState('');
   const [currentRoomId, setCurrentRoomId] = useState('');
   const [playerId, setPlayerId] = useState('');
   const [room, setRoom] = useState<Room | null>(null);
   const [myCards, setMyCards] = useState<Card[]>([]);
-  const [gameState, setGameState] = useState<'lobby' | 'waiting' | 'playing'>('lobby');
-  const [selectedCard, setSelectedCard] = useState<string | null>(null);
-  const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
-  const [selectedAnimal, setSelectedAnimal] = useState<string>('แมลงสาบ');
-  const [message, setMessage] = useState('');
-  const [currentAction, setCurrentAction] = useState<CurrentAction | null>(null);
-  const [gameLogs, setGameLogs] = useState<GameLog[]>([]);
-  const [sortCards, setSortCards] = useState<boolean>(false);
+  const [phase, setPhase] = useState<'lobby' | 'waiting' | 'playing'>('lobby');
 
-  // ── ฟีเจอร์กวนๆ ──
-  const [emotes, setEmotes] = useState<EmoteBubble[]>([]);
+  const [selectedCard, setSelectedCard] = useState<string | null>(null);
+  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
+  const [claim, setClaim] = useState<string>(CREATURE_NAMES[0]);
+  const [currentAction, setCurrentAction] = useState<CurrentAction | null>(null);
+
+  const [notice, setNotice] = useState('');
+  const [announcement, setAnnouncement] = useState('');
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [sortHand, setSortHand] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [quoteIndex, setQuoteIndex] = useState(0);
+
+  const [reveal, setReveal] = useState<Reveal | null>(null);
+  const [flipped, setFlipped] = useState(false);
+  const [shake, setShake] = useState(false);
+  const [gameOverInfo, setGameOverInfo] = useState<GameOverInfo | null>(null);
+  const [rulesOpen, setRulesOpen] = useState(false);
+
   const [detectorState, setDetectorState] = useState<'idle' | 'scanning' | 'done'>('idle');
   const [detectorVerdict, setDetectorVerdict] = useState('');
-  const [gameOverInfo, setGameOverInfo] = useState<GameOverInfo | null>(null);
-  const [copied, setCopied] = useState(false);
 
-  // ── แชทในห้อง (ล้างทิ้งเมื่อจบเกม) ──
+  const [emotes, setEmotes] = useState<{ id: number; from: string; text: string }[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
 
-  // Refs for auto-scrolling (เลื่อนเฉพาะในกล่อง ไม่เลื่อนทั้งหน้า)
-  const logsBoxRef = useRef<HTMLDivElement>(null);
-  const challengeActionsRef = useRef<HTMLDivElement>(null);
-  const chatBoxRef = useRef<HTMLDivElement>(null);
-
-  // Refs สำหรับ auto-rejoin — ให้ handler ใน socket effect อ่านค่าล่าสุดได้เสมอ
+  const decisionRef = useRef<HTMLDivElement>(null);
   const sessionIdRef = useRef('');
   const currentRoomIdRef = useRef('');
   const playerNameRef = useRef('');
 
-  const ANIMALS = ['แมลงสาบ', 'หนู', 'แมลงวัน', 'แมงป่อง', 'แมลงเขียว', 'แมงมุม', 'ค้างคาว', 'กบ'];
-
-  const addLog = (type: GameLog['type'], message: string) => {
-    setGameLogs(prev => [...prev, {
-      id: Date.now() + Math.random(),
-      type,
-      message,
-      timestamp: new Date()
-    }]);
+  const addLog = (entry: Omit<LogEntry, 'id' | 'timestamp'>) => {
+    setLogs((prev) => [...prev.slice(-99), { ...entry, id: Date.now() + Math.random(), timestamp: new Date() }]);
   };
 
-  // Auto-scroll ไปที่ log ล่าสุด — เลื่อนแค่ในกล่อง log ไม่ดึงทั้งหน้าขึ้นไป
-  useEffect(() => {
-    const el = logsBoxRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-  }, [gameLogs]);
-
-  // Auto-scroll ไปที่ข้อความแชทล่าสุด — เลื่อนแค่ในกล่องแชทเช่นกัน
-  useEffect(() => {
-    const el = chatBoxRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-  }, [chatMessages]);
-
-  // หมุนคำคมนักโกหกทุก 6 วินาที
   useEffect(() => {
     const timer = setInterval(() => setQuoteIndex((i) => (i + 1) % LIAR_QUOTES.length), 6000);
     return () => clearInterval(timer);
   }, []);
 
+  // ─── Socket wiring. Event names and payloads are unchanged. ───────────────
   useEffect(() => {
-    // Initialize Socket.IO API endpoint first
     fetch('/api/socketio');
-
     sessionIdRef.current = getSessionId();
 
-    // Use the same host as the current page for Socket.IO connection
-    const socketUrl = typeof window !== 'undefined'
-      ? `${window.location.protocol}//${window.location.host}`
-      : 'http://localhost:3002';
+    const socketUrl =
+      typeof window !== 'undefined'
+        ? `${window.location.protocol}//${window.location.host}`
+        : 'http://localhost:3002';
 
-    const newSocket = io(socketUrl, {
+    const socket = io(socketUrl, {
       path: '/api/socketio',
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000
+      reconnectionDelayMax: 5000,
     });
+    socketRef.current = socket;
 
-    socketRef.current = newSocket;
-
-    newSocket.on('connect', () => {
-      console.log('Connected to server at:', socketUrl);
-
-      // เคยอยู่ในห้อง (หลุดชั่วคราว หรือปิดเว็บแล้วกลับมา) → กลับเข้าห้องเดิมอัตโนมัติ
+    socket.on('connect', () => {
       const saved = readSavedRoom();
-      if (saved?.playerName) {
-        // เติมชื่อเดิมในช่องกรอกให้ (เฉพาะตอนที่ยังไม่ได้พิมพ์อะไรไว้)
-        setPlayerName(prev => prev || saved.playerName);
-      }
+      if (saved?.playerName) setPlayerName((prev) => prev || saved.playerName);
       const target = currentRoomIdRef.current
         ? { roomId: currentRoomIdRef.current, playerName: playerNameRef.current }
         : saved;
       if (target?.roomId) {
-        newSocket.emit('joinRoom', {
+        socket.emit('joinRoom', {
           roomId: target.roomId,
           playerName: target.playerName,
-          sessionId: sessionIdRef.current
+          sessionId: sessionIdRef.current,
         });
       }
     });
 
-    newSocket.on('roomCreated', ({ roomId, playerId, playerName: joinedName }) => {
+    socket.on('roomCreated', ({ roomId, playerId: id, playerName: joinedName }) => {
       currentRoomIdRef.current = roomId;
       playerNameRef.current = joinedName || '';
       saveRoom(roomId, joinedName || '');
       setCurrentRoomId(roomId);
-      setPlayerId(playerId);
-      // ล้างสถานะค้างจากห้องเดิม (กรณีกด "เริ่มใหม่" ระหว่างเล่นแล้วได้ห้องใหม่)
+      setPlayerId(id);
       setRoom(null);
       setMyCards([]);
       setChatMessages([]);
-      setGameLogs([]);
+      setLogs([]);
       setCurrentAction(null);
       setGameOverInfo(null);
-      setGameState('waiting');
-      setMessage(`สร้างห้อง ${roomId} สำเร็จ! แชร์รหัสนี้ให้เพื่อน`);
+      setPhase('waiting');
+      setNotice(`สร้างห้อง ${roomId} แล้ว ส่งรหัสให้เพื่อนได้เลย`);
     });
 
-    newSocket.on('roomJoined', ({ roomId, playerId, playerName: joinedName, rejoined }) => {
+    socket.on('roomJoined', ({ roomId, playerId: id, playerName: joinedName, rejoined }) => {
       currentRoomIdRef.current = roomId;
       playerNameRef.current = joinedName || '';
       saveRoom(roomId, joinedName || '');
       setCurrentRoomId(roomId);
-      setPlayerId(playerId);
-      setGameState('waiting');
-      setMessage(rejoined ? 'กลับเข้าห้องเดิมสำเร็จ!' : 'เข้าร่วมห้องสำเร็จ!');
+      setPlayerId(id);
+      setPhase('waiting');
+      setNotice(rejoined ? 'กลับเข้าห้องเดิมเรียบร้อย' : 'เข้าร่วมห้องแล้ว');
     });
 
-    newSocket.on('joinFailed', ({ reason }) => {
-      // ห้องเดิมไม่อยู่แล้ว (หรือเข้าไม่ได้) → ล้างค่าที่จำไว้ กลับหน้า lobby
+    socket.on('joinFailed', ({ reason }) => {
       clearSavedRoom();
       currentRoomIdRef.current = '';
       setCurrentRoomId('');
       setRoom(null);
-      setGameState('lobby');
-      setMessage(reason);
+      setPhase('lobby');
+      setNotice(reason);
     });
 
-    newSocket.on('roomUpdate', (updatedRoom) => {
-      setRoom(updatedRoom);
-      // เกมถูกยกเลิก/จบไปแล้วระหว่างที่เราหลุด → กลับไปหน้าห้องรอ
-      if (updatedRoom && !updatedRoom.gameStarted) {
-        setGameState(prev => (prev === 'playing' ? 'waiting' : prev));
-      }
+    socket.on('roomUpdate', (updated: Room) => {
+      setRoom(updated);
+      if (updated && !updated.gameStarted) setPhase((p) => (p === 'playing' ? 'waiting' : p));
     });
 
-    newSocket.on('gameCancelled', ({ message: cancelMessage }) => {
+    socket.on('gameCancelled', ({ message }) => {
       setCurrentAction(null);
-      setGameState('waiting');
-      setMessage(cancelMessage);
+      setPhase('waiting');
+      setNotice(message);
     });
 
-    newSocket.on('playerDisconnected', ({ playerName: leftName }) => {
-      setMessage(`${leftName} หลุดการเชื่อมต่อ กำลังรอกลับเข้ามา...`);
+    socket.on('playerDisconnected', ({ playerName: leftName }) => {
+      setNotice(`${leftName} หลุดการเชื่อมต่อ กำลังรอกลับเข้ามา`);
     });
 
-    newSocket.on('gameStarted', (updatedRoom) => {
-      setRoom(updatedRoom);
-      setGameState('playing');
-      setMessage('เกมเริ่มแล้ว! หน้านิ่งเข้าไว้');
-      setGameLogs([]);
+    socket.on('gameStarted', (updated: Room) => {
+      setRoom(updated);
+      setPhase('playing');
+      setNotice('เกมเริ่มแล้ว หน้านิ่งเข้าไว้');
+      setLogs([]);
       setGameOverInfo(null);
-      // ล้างสถานะค้างจากเกมก่อนหน้า (สำคัญตอนเริ่มเกมใหม่กลางคัน)
+      setReveal(null);
       setCurrentAction(null);
       setSelectedCard(null);
-      setSelectedPlayer(null);
+      setSelectedTarget(null);
     });
 
-    // หัวหน้าห้องกด "เริ่มใหม่" → ห้องเดิมถูกปิด ทุกคน (ยกเว้นหัวหน้าห้อง) ถูกเตะกลับหน้า lobby
-    newSocket.on('roomClosed', ({ message: closedMessage }) => {
+    socket.on('roomClosed', ({ message }) => {
       clearSavedRoom();
       currentRoomIdRef.current = '';
       setCurrentRoomId('');
       setRoom(null);
       setMyCards([]);
       setChatMessages([]);
-      setGameLogs([]);
+      setLogs([]);
       setCurrentAction(null);
       setGameOverInfo(null);
-      setGameState('lobby');
-      setMessage(closedMessage);
+      setPhase('lobby');
+      setNotice(message);
     });
 
-    newSocket.on('yourCards', (cards) => {
-      setMyCards(cards);
-    });
+    socket.on('yourCards', (cards: Card[]) => setMyCards(cards));
 
-    newSocket.on('cardSent', (data) => {
-      setMessage(`${data.from} ส่งไพ่ให้ ${data.to} โดยอ้างว่าเป็น ${data.claim}`);
+    socket.on('cardSent', (data: CurrentAction) => {
+      setReveal(null);
       setCurrentAction(data);
       setDetectorState('idle');
       setDetectorVerdict('');
-      addLog('receive', `${data.from} ส่งไพ่ให้ ${data.to} อ้างว่าเป็น ${data.claim}`);
+      setNotice(`${data.from} ส่งไพ่ให้ ${data.to} โดยอ้างว่าเป็น ${data.claim}`);
+      setAnnouncement(`${data.from} ส่งไพ่ให้ ${data.to} อ้างว่าเป็น ${data.claim}`);
+      addLog({ type: 'send', message: `${data.from} ส่งไพ่ให้ ${data.to} อ้างว่าเป็น ${data.claim}`, creature: data.claim });
     });
 
-    newSocket.on('challengeResult', (result) => {
-      setMessage(result.message);
+    // The reveal is client-side theatre over the existing challengeResult payload.
+    socket.on('challengeResult', (result) => {
       setCurrentAction(null);
-      addLog('challenge', `${result.message} (จริง: ${result.actualAnimal}, อ้าง: ${result.claimedAnimal})`);
+      setNotice(result.message);
+      setAnnouncement(`${result.message} ไพ่จริงคือ ${result.actualAnimal} อ้างว่าเป็น ${result.claimedAnimal}`);
+      addLog({
+        type: 'challenge',
+        message: `${result.message} (จริง ${result.actualAnimal} / อ้าง ${result.claimedAnimal})`,
+        creature: result.actualAnimal,
+        result: result.guessCorrect ? 'correct' : 'incorrect',
+      });
+      setFlipped(false);
+      // A wrong call rattles the table (DESIGN.md → Accusation Result)
+      if (!result.guessCorrect) {
+        setShake(true);
+        setTimeout(() => setShake(false), 520);
+      }
+      setReveal({
+        actualAnimal: result.actualAnimal,
+        claimedAnimal: result.claimedAnimal,
+        guessCorrect: Boolean(result.guessCorrect),
+        loserName: result.loserName ?? '',
+        message: result.message,
+      });
     });
 
-    newSocket.on('gameOver', (data) => {
+    socket.on('gameOver', (data) => {
       const title = randomOf(LOSER_TITLES);
-      const displayMessage = `จบเกม! ${data.loser} แพ้เพราะ${data.reason}`;
-
-      setMessage(displayMessage);
-      setGameState('waiting');
+      setPhase('waiting');
+      setReveal(null);
       setGameOverInfo({ loser: data.loser, reason: data.reason, title });
-      addLog('gameOver', `${displayMessage} — ได้รับฉายา "${title}"`);
+      setNotice(`จบเกม ${data.loser} แพ้เพราะ${data.reason}`);
+      setAnnouncement(`จบเกม ${data.loser} แพ้เพราะ${data.reason}`);
+      addLog({ type: 'gameOver', message: `จบเกม ${data.loser} แพ้เพราะ${data.reason} ได้รับฉายา "${title}"` });
     });
 
-    newSocket.on('emote', (data: { from: string; fromId: string; text: string }) => {
-      const bubble: EmoteBubble = { id: Date.now() + Math.random(), from: data.from, text: data.text };
-      setEmotes(prev => [...prev.slice(-3), bubble]);
-      addLog('emote', `${data.from}: "${data.text}"`);
-      setTimeout(() => {
-        setEmotes(prev => prev.filter(e => e.id !== bubble.id));
-      }, 4200);
+    socket.on('emote', (data: { from: string; fromId: string; text: string }) => {
+      const bubble = { id: Date.now() + Math.random(), from: data.from, text: data.text };
+      setEmotes((prev) => [...prev.slice(-3), bubble]);
+      addLog({ type: 'emote', message: `${data.from}: "${data.text}"` });
+      setTimeout(() => setEmotes((prev) => prev.filter((e) => e.id !== bubble.id)), 4200);
     });
 
-    newSocket.on('chatMessage', (msg: ChatMessage) => {
-      setChatMessages(prev => [...prev.slice(-99), msg]);
-    });
-
-    newSocket.on('chatHistory', (messages: ChatMessage[]) => {
-      setChatMessages(messages);
-    });
-
-    newSocket.on('chatCleared', () => {
-      setChatMessages([]);
-    });
-
-    newSocket.on('playerLeft', (data) => {
-      setMessage(`${data.playerName} ออกจากห้อง (หนีความพ่ายแพ้สินะ)`);
-    });
-
-    newSocket.on('error', (msg) => {
-      setMessage(msg);
-    });
+    socket.on('chatMessage', (msg: ChatMessage) => setChatMessages((prev) => [...prev.slice(-99), msg]));
+    socket.on('chatHistory', (msgs: ChatMessage[]) => setChatMessages(msgs));
+    socket.on('chatCleared', () => setChatMessages([]));
+    socket.on('playerLeft', (data) => setNotice(`${data.playerName} ออกจากห้อง (หนีความพ่ายแพ้สินะ)`));
+    socket.on('error', (msg: string) => setNotice(msg));
 
     return () => {
-      newSocket.close();
+      socket.close();
     };
   }, []);
 
-  const createRoom = () => {
-    if (!playerName.trim()) {
-      setMessage('กรุณาใส่ชื่อของคุณ (หรือกดลูกเต๋าให้ระบบตั้งให้)');
-      return;
+  // Run the flip once a reveal lands, then clear the scene.
+  useEffect(() => {
+    if (!reveal) return;
+    const flip = setTimeout(() => setFlipped(true), 260);
+    const close = setTimeout(() => setReveal(null), 5200);
+    return () => {
+      clearTimeout(flip);
+      clearTimeout(close);
+    };
+  }, [reveal]);
+
+  const isMyTurn = room?.currentPlayer === playerId;
+  const awaitingMyDecision = Boolean(isMyTurn && currentAction && currentAction.toId === playerId);
+  const isHost = room?.players[0]?.id === playerId;
+  const activePlayer = room?.players.find((p) => p.id === room.currentPlayer);
+
+  useEffect(() => {
+    if (awaitingMyDecision) {
+      setTimeout(() => decisionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 120);
     }
+  }, [awaitingMyDecision]);
+
+  // Derived, not stored — the live region re-reads it whenever the turn moves.
+  const turnAnnouncement =
+    phase === 'playing' && activePlayer
+      ? isMyTurn
+        ? 'ถึงตาของคุณแล้ว'
+        : `ถึงตาของ ${activePlayer.name}`
+      : '';
+
+  // ─── Actions ──────────────────────────────────────────────────────────────
+
+  const createRoom = () => {
+    if (!playerName.trim()) return setNotice('ใส่ชื่อก่อน หรือกดลูกเต๋าให้ระบบตั้งให้');
     socketRef.current?.emit('createRoom', { playerName, sessionId: sessionIdRef.current });
   };
 
   const joinRoom = () => {
-    if (!playerName.trim() || !roomId.trim()) {
-      setMessage('กรุณาใส่ชื่อและรหัสห้อง');
-      return;
-    }
-    socketRef.current?.emit('joinRoom', { roomId: roomId.toUpperCase(), playerName, sessionId: sessionIdRef.current });
+    if (!playerName.trim() || !roomInput.trim()) return setNotice('ต้องใส่ทั้งชื่อและรหัสห้อง');
+    socketRef.current?.emit('joinRoom', {
+      roomId: roomInput.toUpperCase(),
+      playerName,
+      sessionId: sessionIdRef.current,
+    });
   };
 
-  const startGame = () => {
-    socketRef.current?.emit('startGame', { roomId: currentRoomId });
-  };
+  const startGame = () => socketRef.current?.emit('startGame', { roomId: currentRoomId });
 
   const restartGame = () => {
-    if (!window.confirm('เริ่มใหม่เลยไหม? ห้องนี้จะถูกปิด ทุกคนจะถูกเตะออก แล้วคุณจะได้ห้องใหม่พร้อมรหัสใหม่')) return;
+    if (!window.confirm('เริ่มใหม่เลยไหม ห้องนี้จะถูกปิด ทุกคนจะถูกเตะออก แล้วคุณจะได้ห้องใหม่พร้อมรหัสใหม่')) return;
     socketRef.current?.emit('restartGame', { roomId: currentRoomId });
   };
 
   const sendCard = () => {
-    if (!selectedCard || !selectedPlayer) {
-      setMessage('กรุณาเลือกไพ่และผู้เล่นที่จะส่งให้');
-      return;
-    }
+    if (!selectedCard || !selectedTarget) return setNotice('เลือกไพ่และคนที่จะส่งให้ก่อน');
     socketRef.current?.emit('sendCard', {
       roomId: currentRoomId,
-      targetPlayerId: selectedPlayer,
+      targetPlayerId: selectedTarget,
       cardId: selectedCard,
-      claimedAnimal: selectedAnimal
+      claimedAnimal: claim,
     });
     setSelectedCard(null);
-    setSelectedPlayer(null);
+    setSelectedTarget(null);
   };
 
-  const handleChallenge = (guessIsLie: boolean) => {
+  const challenge = (guessIsLie: boolean) => {
     socketRef.current?.emit('challenge', { roomId: currentRoomId, guessIsLie });
     setDetectorState('idle');
     setDetectorVerdict('');
   };
 
-  const sendTaunt = (text: string) => {
-    socketRef.current?.emit('sendEmote', { roomId: currentRoomId, text });
-  };
+  const sendTaunt = (text: string) => socketRef.current?.emit('sendEmote', { roomId: currentRoomId, text });
 
   const sendChat = () => {
     const text = chatInput.trim();
     if (!text) return;
     socketRef.current?.emit('sendChatMessage', { roomId: currentRoomId, text });
     setChatInput('');
-  };
-
-  const rollFunnyName = () => {
-    setPlayerName(randomOf(FUNNY_NAMES));
   };
 
   const copyRoomCode = useCallback(() => {
@@ -522,7 +504,6 @@ export default function GamePage() {
     });
   }, [currentRoomId]);
 
-  // เครื่องจับโกหก (ความแม่นยำระดับเหรียญเสี่ยงทาย)
   const runLieDetector = () => {
     if (detectorState === 'scanning') return;
     setDetectorState('scanning');
@@ -533,243 +514,246 @@ export default function GamePage() {
     }, 1700);
   };
 
-  const getAnimalImage = (animal: string) => {
-    const imageMap: { [key: string]: string } = {
-      'แมลงสาบ': '/Cockroach.png',
-      'หนู': '/Rat.png',
-      'แมลงเขียว': '/Cricket.png',
-      'แมงมุม': '/Spider.png',
-      'แมลงวัน': '/Fly.png',
-      'ค้างคาว': '/Bat.png',
-      'กบ': '/Frog.png',
-      'แมงป่อง': '/Scorpion.png'
-    };
-    return imageMap[animal] || '/Cockroach.png';
-  };
+  const handCards = sortHand
+    ? [...myCards].sort((a, b) => a.animal.localeCompare(b.animal, 'th'))
+    : myCards;
 
-  const isMyTurn = room?.currentPlayer === playerId;
+  // ─── Pieces ───────────────────────────────────────────────────────────────
 
-  // Auto-scroll ไปที่ challenge actions เมื่อได้รับไพ่
-  useEffect(() => {
-    if (isMyTurn && currentAction && currentAction.toId === playerId) {
-      setTimeout(() => {
-        challengeActionsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 100);
-    }
-  }, [currentAction, isMyTurn, playerId]);
-
-  // ─── shared style ───────────────────────────────────────────────────────────
-  const softCard = {
-    bgcolor: '#FFFFFF',
-    border: '1px solid rgba(55,71,79,0.08)',
-    borderRadius: '1.5rem',
-    boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-  };
-
-  // ── กล่องแชทในห้อง (ใช้ทั้งห้องรอและตอนเล่น) ──
-  const chatPanel = (
-    <Paper elevation={0} sx={{ ...softCard, p: 2.5, display: 'flex', flexDirection: 'column' }}>
-      <Typography
-        component="div"
-        variant="h6"
-        fontWeight={700}
-        sx={{ mb: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}
-      >
-        <ForumRoundedIcon sx={{ color: '#42A5F5' }} />
-        แชทในห้อง
-      </Typography>
-      <Typography variant="caption" sx={{ color: '#B0BEC5', mb: 1.5 }}>
-        เห็นเฉพาะคนในห้องนี้ และจะถูกล้างเมื่อจบเกม
-      </Typography>
-
+  const tauntStrip = (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <TheaterComedyRoundedIcon sx={{ fontSize: 18, color: T.wood, flexShrink: 0 }} />
       <Box
-        ref={chatBoxRef}
         sx={{
-          height: 220,
-          overflowY: 'auto',
           display: 'flex',
-          flexDirection: 'column',
-          gap: 1,
-          mb: 1.5,
-          pr: 0.5,
-          '&::-webkit-scrollbar': { width: 4 },
-          '&::-webkit-scrollbar-track': { bgcolor: 'rgba(55,71,79,0.05)', borderRadius: 2 },
-          '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(66,165,245,0.4)', borderRadius: 2 },
+          gap: 0.75,
+          overflowX: 'auto',
+          py: 0.5,
+          '&::-webkit-scrollbar': { height: 0 },
         }}
       >
-        {chatMessages.length === 0 ? (
-          <Typography
-            variant="body2"
-            sx={{ color: '#B0BEC5', textAlign: 'center', fontStyle: 'italic', py: 4 }}
+        {TAUNTS.map((t) => (
+          <Box
+            key={t}
+            component="button"
+            type="button"
+            onClick={() => sendTaunt(t)}
+            sx={{
+              flexShrink: 0,
+              px: 1.5,
+              py: 0.6,
+              font: 'inherit',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              color: T.wood,
+              bgcolor: T.paper,
+              cursor: 'pointer',
+              borderRadius: 'var(--r-pill)',
+              border: `2px solid ${T.stroke}`,
+              boxShadow: '0 3px 0 rgba(80,58,38,0.14)',
+              transition: 'transform 160ms var(--spring)',
+              '&:hover': { transform: 'translateY(-2px)', borderColor: T.mustard },
+              '&:active': { transform: 'translateY(2px)', boxShadow: '0 1px 0 rgba(80,58,38,0.14)' },
+            }}
           >
-            ยังไม่มีข้อความ ทักไปเลย อย่าอาย
-          </Typography>
-        ) : (
-          chatMessages.map((msg) => {
-            const mine = msg.fromId === playerId;
-            return (
-              <Box key={msg.id} sx={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
-                <Box
-                  sx={{
-                    px: 1.5,
-                    py: 0.8,
-                    borderRadius: mine ? '1rem 1rem 0.25rem 1rem' : '1rem 1rem 1rem 0.25rem',
-                    bgcolor: mine ? 'rgba(124,179,66,0.15)' : 'rgba(55,71,79,0.05)',
-                    border: mine ? '1px solid rgba(124,179,66,0.35)' : '1px solid rgba(55,71,79,0.08)',
-                  }}
-                >
-                  {!mine && (
-                    <Typography variant="caption" fontWeight={700} sx={{ color: '#8D6E63', display: 'block' }}>
-                      {msg.from}
-                    </Typography>
-                  )}
-                  <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
-                    {msg.text}
-                  </Typography>
-                </Box>
-              </Box>
-            );
-          })
-        )}
+            {t}
+          </Box>
+        ))}
       </Box>
+    </Box>
+  );
 
-      <Box sx={{ display: 'flex', gap: 1 }}>
-        <TextField
-          size="small"
-          fullWidth
-          placeholder="พิมพ์ข้อความ..."
-          value={chatInput}
-          onChange={(e) => setChatInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              sendChat();
-            }
-          }}
-          inputProps={{ maxLength: 200 }}
-        />
-        <IconButton
-          onClick={sendChat}
-          disabled={!chatInput.trim()}
+  const roomCodePlate = (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 1.5,
+        px: 2.5,
+        py: 1.75,
+        borderRadius: 'var(--r-md)',
+        bgcolor: 'rgba(217,164,65,0.16)',
+        border: `2px dashed ${T.mustard}`,
+      }}
+    >
+      <Box>
+        <Typography sx={{ ...labelCaps, textAlign: 'center', mb: 0.25 }}>รหัสห้อง</Typography>
+        <Typography
           sx={{
-            bgcolor: '#42A5F5',
-            color: '#fff',
-            borderRadius: '0.75rem',
-            '&:hover': { bgcolor: '#1E88E5' },
-            '&.Mui-disabled': { bgcolor: 'rgba(55,71,79,0.08)', color: '#B0BEC5' },
+            fontFamily: 'var(--font-mono)',
+            fontSize: 'clamp(1.75rem, 5vw, 2.5rem)',
+            fontWeight: 700,
+            letterSpacing: '0.18em',
+            color: T.wood,
+            lineHeight: 1,
           }}
         >
-          <SendRoundedIcon fontSize="small" />
-        </IconButton>
+          {currentRoomId}
+        </Typography>
       </Box>
-    </Paper>
+      <Tooltip title={copied ? 'คัดลอกแล้ว' : 'คัดลอกรหัส'} placement="top">
+        <IconButton
+          onClick={copyRoomCode}
+          aria-label="คัดลอกรหัสห้อง"
+          sx={{ width: 44, height: 44, color: copied ? T.leaf : T.wood }}
+        >
+          {copied ? <CheckRoundedIcon /> : <ContentCopyRoundedIcon />}
+        </IconButton>
+      </Tooltip>
+    </Box>
   );
 
   return (
     <Box
       sx={{
         minHeight: '100dvh',
-        background: 'linear-gradient(180deg, #DCEFFB 0%, #EAF5E3 45%, #FAFAFA 100%)',
-        color: '#37474F',
-        fontFamily: "'Kanit', sans-serif",
-        pb: gameState === 'playing' ? 12 : 4,
+        bgcolor: T.table,
+        color: T.charcoal,
+        // Softly blurred diorama light coming from above the table
+        backgroundImage:
+          'radial-gradient(90% 55% at 50% -8%, rgba(217,164,65,0.22) 0%, transparent 60%),' +
+          'radial-gradient(70% 50% at 100% 100%, rgba(95,122,58,0.12) 0%, transparent 60%)',
+        pb: 6,
       }}
     >
-      {/* ── TOP BAR ── */}
+      {/* Turn changes and reveals are announced to assistive tech */}
+      <Box component="output" aria-live="polite" sx={srOnly}>
+        {[turnAnnouncement, announcement].filter(Boolean).join(' ')}
+      </Box>
+
+      {/* ─── Top bar ─── */}
       <Box
+        component="header"
         sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 1.5,
-          py: 1.5,
-          px: 3,
-          bgcolor: 'rgba(250,250,250,0.85)',
-          backdropFilter: 'blur(12px)',
-          borderBottom: '1px solid rgba(55,71,79,0.08)',
           position: 'sticky',
           top: 0,
           zIndex: 100,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.5,
+          px: { xs: 2, md: 3 },
+          py: 1.25,
+          bgcolor: 'rgba(243,233,215,0.94)',
+          borderBottom: `2px solid ${T.stroke}`,
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/Cockroach.png" alt="" style={{ width: 30, height: 30, objectFit: 'contain' }} />
-        <Typography variant="h6" fontWeight={700} sx={{ letterSpacing: '-0.01em' }}>
-          Kaker Laken <Box component="span" sx={{ color: '#7CB342' }}>Poker</Box>
+        <Typography
+          sx={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', fontWeight: 700, letterSpacing: '-0.01em' }}
+        >
+          Cockroach <Box component="span" sx={{ color: T.moss }}>Table</Box>
         </Typography>
-        {currentRoomId && (
-          <Chip
-            label={`ห้อง ${currentRoomId}`}
-            size="small"
-            sx={{ ml: 1, bgcolor: 'rgba(124,179,66,0.15)', color: '#558B2F' }}
-          />
-        )}
-      </Box>
 
-      <Box sx={{ maxWidth: 1400, mx: 'auto', p: { xs: 2, md: 3 } }}>
-        {/* ── MESSAGE ALERT ── */}
-        {message && (
-          <Alert
-            severity="info"
-            icon={false}
+        {currentRoomId && (
+          <Box
             sx={{
-              mb: 3,
-              bgcolor: 'rgba(66,165,245,0.1)',
-              color: '#1E88E5',
-              border: '1px solid rgba(66,165,245,0.3)',
-              fontWeight: 500,
-              fontSize: '0.95rem',
-              animation: 'riseIn 300ms ease-out',
+              ml: 0.5,
+              px: 1.25,
+              py: 0.35,
+              borderRadius: 'var(--r-pill)',
+              bgcolor: 'rgba(95,122,58,0.14)',
+              border: `1.5px solid rgba(95,122,58,0.35)`,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.6,
             }}
           >
-            {message}
-          </Alert>
+            <Typography sx={{ fontSize: '0.68rem', fontWeight: 700, color: T.mossDark }}>ห้อง</Typography>
+            <Typography
+              sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', fontWeight: 700, color: T.mossDark, letterSpacing: '0.08em' }}
+            >
+              {currentRoomId}
+            </Typography>
+          </Box>
         )}
 
-        {/* ══════════════════ LOBBY ══════════════════ */}
-        {gameState === 'lobby' && (
-          <Box sx={{ maxWidth: 480, mx: 'auto', mt: 6, animation: 'riseIn 540ms ease-out' }}>
-            <Paper elevation={0} sx={{ ...softCard, p: { xs: 4, md: 5 }, position: 'relative', overflow: 'visible' }}>
-              {/* mascot on the roof */}
+        <Box sx={{ flex: 1 }} />
+
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<MenuBookRoundedIcon />}
+          onClick={() => setRulesOpen(true)}
+          sx={{ py: 0.75, px: 1.75, fontSize: '0.82rem' }}
+        >
+          กติกา
+        </Button>
+      </Box>
+
+      <Box sx={{ maxWidth: 1440, mx: 'auto', px: 'clamp(1rem, 4vw, 2.5rem)', pt: 3 }}>
+        {/* ─── Notice: a paper slip pinned to the table ─── */}
+        {notice && (
+          <Box
+            sx={{
+              ...paperCard,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              px: 2,
+              py: 1.25,
+              mb: 3,
+              borderLeft: `6px solid ${T.mustard}`,
+              animation: 'placeIn 260ms var(--ease-out)',
+            }}
+          >
+            <Typography sx={{ flex: 1, fontSize: '0.92rem', fontWeight: 600 }}>{notice}</Typography>
+            <IconButton onClick={() => setNotice('')} aria-label="ปิดข้อความ" size="small" sx={{ color: T.taupe }}>
+              <CloseRoundedIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        )}
+
+        {/* ══════════════ LOBBY ══════════════ */}
+        {phase === 'lobby' && (
+          <Box sx={{ maxWidth: 480, mx: 'auto', mt: { xs: 2, md: 5 }, animation: 'placeIn 420ms var(--ease-out)' }}>
+            <Box className="grain" sx={{ ...paperCard, p: { xs: 3, md: 4 }, position: 'relative', overflow: 'visible' }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/Frog.png"
                 alt=""
                 style={{
                   position: 'absolute',
-                  top: -38,
-                  right: 28,
-                  width: 64,
-                  height: 64,
+                  top: -34,
+                  right: 24,
+                  width: 62,
+                  height: 62,
                   objectFit: 'contain',
-                  animation: 'bob 3.2s ease-in-out infinite',
-                  filter: 'drop-shadow(0 8px 8px rgba(55,71,79,0.2))',
+                  animation: 'bob 3.4s ease-in-out infinite',
+                  filter: 'drop-shadow(0 8px 6px rgba(48,46,40,0.22))',
                 }}
               />
-              <Typography variant="h4" fontWeight={700} textAlign="center" sx={{ mb: 1 }}>
-                เข้าร่วมเกม
-              </Typography>
-              <Typography variant="body2" textAlign="center" sx={{ color: '#78909C', mb: 4 }}>
-                สร้างห้องใหม่หรือเข้าร่วมห้องของเพื่อน
-              </Typography>
 
+              <Typography sx={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 700, mb: 0.5 }}>
+                นั่งลงที่โต๊ะ
+              </Typography>
+              <Typography sx={{ color: T.taupe, mb: 3 }}>สร้างโต๊ะใหม่ หรือเข้าโต๊ะที่เพื่อนเปิดไว้</Typography>
+
+              <Typography component="label" htmlFor="nickname" sx={{ ...labelCaps, display: 'block', mb: 0.75 }}>
+                ชื่อผู้เล่น
+              </Typography>
               <Box sx={{ display: 'flex', gap: 1, mb: 3 }}>
                 <TextField
-                  label="ชื่อของคุณ"
+                  id="nickname"
                   fullWidth
+                  placeholder="ตั้งชื่อที่ดูน่าเชื่อถือ"
                   value={playerName}
                   onChange={(e) => setPlayerName(e.target.value)}
                 />
-                <Tooltip title="ขี้เกียจคิดชื่อ? กดเลย" placement="top">
+                <Tooltip title="ขี้เกียจคิดชื่อ กดเลย" placement="top">
                   <IconButton
-                    onClick={rollFunnyName}
+                    onClick={() => setPlayerName(randomOf(FUNNY_NAMES))}
+                    aria-label="สุ่มชื่อ"
                     sx={{
-                      width: 56,
-                      height: 56,
-                      borderRadius: '1rem',
-                      bgcolor: 'rgba(255,204,128,0.35)',
-                      color: '#8D6E63',
-                      '&:hover': { bgcolor: 'rgba(255,204,128,0.6)', transform: 'rotate(20deg)' },
+                      width: 52,
+                      height: 52,
+                      flexShrink: 0,
+                      borderRadius: 'var(--r-sm)',
+                      bgcolor: 'rgba(217,164,65,0.22)',
+                      color: T.wood,
+                      border: `2px solid ${T.stroke}`,
+                      '&:hover': { bgcolor: 'rgba(217,164,65,0.4)', transform: 'rotate(18deg)' },
                       transition: 'all 200ms var(--spring)',
                     }}
                   >
@@ -781,834 +765,751 @@ export default function GamePage() {
               <Button
                 variant="contained"
                 fullWidth
-                size="large"
                 startIcon={<GroupAddRoundedIcon />}
                 onClick={createRoom}
-                sx={{ mb: 3, py: 1.6, fontSize: '1.05rem' }}
+                sx={{ mb: 2.5, fontSize: '1.02rem' }}
               >
-                สร้างห้องใหม่
+                สร้างห้องเกม
               </Button>
 
-              <Divider sx={{ mb: 3 }}>
-                <Chip label="หรือ" size="small" sx={{ bgcolor: 'rgba(124,179,66,0.12)', color: '#558B2F' }} />
-              </Divider>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5 }}>
+                <Box sx={{ flex: 1, height: 2, bgcolor: T.stroke, borderRadius: 1 }} />
+                <Typography sx={{ ...labelCaps, color: T.taupe }}>หรือ</Typography>
+                <Box sx={{ flex: 1, height: 2, bgcolor: T.stroke, borderRadius: 1 }} />
+              </Box>
 
+              <Typography component="label" htmlFor="roomcode" sx={{ ...labelCaps, display: 'block', mb: 0.75 }}>
+                รหัสห้อง
+              </Typography>
               <TextField
-                label="รหัสห้อง"
+                id="roomcode"
                 fullWidth
-                value={roomId}
-                onChange={(e) => setRoomId(e.target.value.toUpperCase())}
+                placeholder="ABCD"
+                value={roomInput}
+                onChange={(e) => setRoomInput(e.target.value.toUpperCase())}
                 sx={{ mb: 2 }}
-                inputProps={{ style: { textTransform: 'uppercase', letterSpacing: 4, fontWeight: 700 } }}
+                slotProps={{
+                  htmlInput: {
+                    style: {
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.35em',
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: 700,
+                      fontSize: '1.1rem',
+                    },
+                  },
+                }}
               />
-              <Button
-                variant="outlined"
-                fullWidth
-                size="large"
-                color="secondary"
-                onClick={joinRoom}
-                sx={{ py: 1.6, fontSize: '1.05rem' }}
-              >
+              <Button variant="outlined" fullWidth startIcon={<LoginRoundedIcon />} onClick={joinRoom} sx={{ fontSize: '1.02rem' }}>
                 เข้าร่วมห้อง
               </Button>
-            </Paper>
+            </Box>
 
-            {/* คำคมนักโกหกหมุนเวียน */}
             <Typography
               key={quoteIndex}
-              variant="body2"
-              textAlign="center"
-              sx={{ mt: 3, color: '#9E9E9E', fontStyle: 'italic', animation: 'riseIn 540ms ease-out' }}
+              sx={{
+                mt: 2.5,
+                textAlign: 'center',
+                color: T.taupe,
+                fontStyle: 'italic',
+                fontSize: '0.88rem',
+                animation: 'placeIn 420ms var(--ease-out)',
+              }}
             >
-              &quot;{LIAR_QUOTES[quoteIndex]}&quot;
+              {LIAR_QUOTES[quoteIndex]}
             </Typography>
           </Box>
         )}
 
-        {/* ══════════════════ WAITING ROOM ══════════════════ */}
-        {gameState === 'waiting' && room && (
-          <Box sx={{ maxWidth: 600, mx: 'auto', mt: 6, animation: 'riseIn 540ms ease-out' }}>
-            <Paper elevation={0} sx={{ ...softCard, p: { xs: 4, md: 5 } }}>
-              <Typography variant="h4" fontWeight={700} textAlign="center" sx={{ mb: 1 }}>
+        {/* ══════════════ WAITING ROOM ══════════════ */}
+        {phase === 'waiting' && room && (
+          <Box
+            sx={{
+              maxWidth: 1000,
+              mx: 'auto',
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: '1.35fr 1fr' },
+              gap: 3,
+              alignItems: 'start',
+              animation: 'placeIn 420ms var(--ease-out)',
+            }}
+          >
+            <Box className="grain" sx={{ ...paperCard, p: { xs: 2.5, md: 3.5 } }}>
+              <Typography sx={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', fontWeight: 700, mb: 0.5 }}>
                 ห้องรอเพื่อน
               </Typography>
-              <Typography variant="body2" textAlign="center" sx={{ color: '#78909C', mb: 4 }}>
-                แชร์รหัสนี้ให้เพื่อนเพื่อเข้าร่วมเกม
+              <Typography sx={{ color: T.taupe, mb: 2.5 }}>
+                ส่งรหัสนี้ให้เพื่อน แล้วรอให้ทุกคนมานั่งครบโต๊ะ
               </Typography>
 
-              <Paper
-                elevation={0}
-                sx={{
-                  bgcolor: 'rgba(255,204,128,0.2)',
-                  border: '2px dashed #FFB74D',
-                  borderRadius: '1.5rem',
-                  boxShadow: 'none',
-                  p: 3,
-                  mb: 4,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 2,
-                }}
-              >
-                <Typography variant="h3" fontWeight={700} sx={{ color: '#8D6E63', letterSpacing: 6 }}>
-                  {currentRoomId}
+              <Box sx={{ mb: 3 }}>{roomCodePlate}</Box>
+
+              {/* Mini table: filled seats plus the empty ones still waiting */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                <PeopleAltRoundedIcon sx={{ fontSize: 18, color: T.wood }} />
+                <Typography sx={{ ...labelCaps }}>ที่นั่ง</Typography>
+                <Typography sx={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: T.charcoal }}>
+                  {room.players.length}/6
                 </Typography>
-                <Tooltip title={copied ? 'คัดลอกแล้ว!' : 'คัดลอกรหัส'} placement="top">
-                  <IconButton onClick={copyRoomCode} sx={{ color: copied ? '#7CB342' : '#8D6E63' }}>
-                    {copied ? <CheckRoundedIcon /> : <ContentCopyRoundedIcon />}
-                  </IconButton>
-                </Tooltip>
-              </Paper>
+              </Box>
 
-              <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
-                ผู้เล่น ({room.players.length}/6)
-              </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 4 }}>
-                {room.players.map((player, i) => (
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.25, mb: 3 }}>
+                {room.players.map((p, i) => (
+                  <Box key={p.id} sx={{ animation: `placeIn 420ms var(--ease-out) ${i * 70}ms backwards` }}>
+                    <PlayerToken
+                      player={{ ...p, handCount: p.id === playerId ? myCards.length : p.cards.length }}
+                      index={i}
+                      isMe={p.id === playerId}
+                      isActive={false}
+                      isHost={i === 0}
+                      compact
+                    />
+                  </Box>
+                ))}
+                {Array.from({ length: Math.max(0, 2 - room.players.length) }).map((_, i) => (
                   <Box
-                    key={player.id}
+                    key={`empty-${i}`}
                     sx={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 2,
-                      p: 2,
-                      bgcolor: player.id === playerId ? 'rgba(124,179,66,0.1)' : 'rgba(55,71,79,0.03)',
-                      borderRadius: '1rem',
-                      border: player.id === playerId ? '1.5px solid rgba(124,179,66,0.5)' : '1.5px solid transparent',
-                      animation: `riseIn 540ms ease-out ${i * 120}ms backwards`,
+                      gap: 1.25,
+                      p: 1.25,
+                      minHeight: 68,
+                      borderRadius: 'var(--r-md)',
+                      border: `2px dashed ${T.stroke}`,
+                      color: T.taupe,
                     }}
                   >
                     <Box
                       sx={{
-                        width: 36,
-                        height: 36,
+                        width: 40,
+                        height: 40,
                         borderRadius: '50%',
-                        bgcolor: i === 0 ? '#FFCC80' : 'rgba(55,71,79,0.08)',
-                        color: i === 0 ? '#8D6E63' : '#78909C',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 700,
-                        fontSize: '0.9rem',
-                        flexShrink: 0,
+                        border: `2px dashed ${T.stroke}`,
+                        display: 'grid',
+                        placeItems: 'center',
                       }}
                     >
-                      {i === 0 ? <StarRoundedIcon fontSize="small" /> : i + 1}
+                      <HourglassEmptyRoundedIcon sx={{ fontSize: 18, color: T.stroke }} />
                     </Box>
-                    <Typography component="div" fontWeight={600} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      {player.name}
-                      {player.id === playerId && (
-                        <Chip
-                          label="คุณ"
-                          size="small"
-                          sx={{ bgcolor: '#7CB342', color: '#fff', height: 20, fontSize: '0.7rem' }}
-                        />
-                      )}
-                      {player.disconnected && (
-                        <Chip
-                          label="หลุดการเชื่อมต่อ"
-                          size="small"
-                          sx={{ bgcolor: 'rgba(229,115,115,0.15)', color: '#E57373', height: 20, fontSize: '0.7rem' }}
-                        />
-                      )}
-                    </Typography>
+                    <Typography sx={{ fontSize: '0.85rem', fontWeight: 600 }}>ที่นั่งว่าง</Typography>
                   </Box>
                 ))}
               </Box>
 
-              {room.players[0]?.id === playerId ? (
+              {isHost ? (
                 <Button
                   variant="contained"
                   fullWidth
-                  size="large"
                   startIcon={<PlayArrowRoundedIcon />}
                   onClick={startGame}
                   disabled={room.players.length < 2}
-                  sx={{ py: 1.6, fontSize: '1.1rem' }}
+                  sx={{ fontSize: '1.05rem' }}
                 >
-                  {room.players.length < 2
-                    ? `รอผู้เล่นเพิ่ม (${room.players.length}/2)`
-                    : 'เริ่มเกม!'}
+                  {room.players.length < 2 ? `รอผู้เล่นอีกอย่างน้อย 1 คน (${room.players.length}/2)` : 'เริ่มเกม'}
                 </Button>
               ) : (
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
-                  <CircularProgress size={20} sx={{ color: '#7CB342' }} />
-                  <Typography sx={{ color: '#78909C' }}>รอให้โฮสต์เริ่มเกม...</Typography>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 1.25,
+                    py: 1.5,
+                    borderRadius: 'var(--r-sm)',
+                    bgcolor: 'rgba(48,46,40,0.04)',
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/Cockroach.png"
+                    alt=""
+                    style={{ width: 26, height: 26, objectFit: 'contain', animation: 'bob 2.4s ease-in-out infinite' }}
+                  />
+                  <Typography sx={{ color: T.taupe, fontWeight: 600 }}>
+                    หัวหน้าห้องกำลังจัดไพ่ รอสักครู่
+                  </Typography>
                 </Box>
               )}
-            </Paper>
-
-            <Box sx={{ mt: 3, animation: 'riseIn 540ms ease-out 200ms backwards' }}>
-              {chatPanel}
             </Box>
 
-            <Typography
-              key={quoteIndex}
-              variant="body2"
-              textAlign="center"
-              sx={{ mt: 3, color: '#9E9E9E', fontStyle: 'italic', animation: 'riseIn 540ms ease-out' }}
-            >
-              &quot;{LIAR_QUOTES[quoteIndex]}&quot;
-            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <ChatPanel
+                messages={chatMessages}
+                myId={playerId}
+                value={chatInput}
+                onChange={setChatInput}
+                onSend={sendChat}
+                height={240}
+              />
+              <Typography
+                key={quoteIndex}
+                sx={{ textAlign: 'center', color: T.taupe, fontStyle: 'italic', fontSize: '0.85rem' }}
+              >
+                {LIAR_QUOTES[quoteIndex]}
+              </Typography>
+            </Box>
           </Box>
         )}
 
-        {/* ══════════════════ PLAYING ══════════════════ */}
-        {gameState === 'playing' && room && (
+        {/* ══════════════ GAME TABLE ══════════════ */}
+        {phase === 'playing' && room && (
           <Box
             sx={{
-              display: 'flex',
-              gap: 3,
-              alignItems: 'flex-start',
-              flexDirection: { xs: 'column', lg: 'row' },
+              display: 'grid',
+              gap: 2.5,
+              alignItems: 'start',
+              gridTemplateColumns: {
+                xs: '1fr',
+                lg: 'minmax(200px, 0.85fr) minmax(420px, 2.3fr) minmax(280px, 1.1fr)',
+              },
             }}
           >
-            {/* ── MAIN GAME AREA ── */}
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              {/* Players Grid */}
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 2, mb: 3 }}>
-                {room.players.map((player, pi) => {
-                  const isActive = player.id === room.currentPlayer;
-                  const isMe = player.id === playerId;
-                  const animalCount: { [key: string]: number } = {};
-                  player.deadCards.forEach((card) => {
-                    animalCount[card.animal] = (animalCount[card.animal] || 0) + 1;
-                  });
-                  const hasFour = Object.values(animalCount).some((c) => c >= 4);
-                  const nearFour = Object.values(animalCount).some((c) => c === 3);
+            {/* ─── Zone 1: players ─── */}
+            <Box
+              component="section"
+              aria-label="ผู้เล่นในเกม"
+              sx={{
+                order: { xs: 2, lg: 1 },
+                display: 'flex',
+                flexDirection: { xs: 'row', lg: 'column' },
+                gap: 1.25,
+                overflowX: { xs: 'auto', lg: 'visible' },
+                pb: { xs: 1, lg: 0 },
+                '&::-webkit-scrollbar': { height: 6 },
+                '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(123,90,62,0.3)', borderRadius: 3 },
+              }}
+            >
+              <Typography sx={{ ...labelCaps, display: { xs: 'none', lg: 'block' }, mb: 0.5 }}>
+                ผู้เล่น
+              </Typography>
+              {room.players.map((p, i) => (
+                <Box key={p.id} sx={{ minWidth: { xs: 210, lg: 'auto' }, flexShrink: 0 }}>
+                  <PlayerToken
+                    player={{ ...p, handCount: p.id === playerId ? myCards.length : p.cards.length }}
+                    index={i}
+                    isMe={p.id === playerId}
+                    isActive={p.id === room.currentPlayer}
+                    isHost={i === 0}
+                  />
+                </Box>
+              ))}
+            </Box>
 
-                  return (
-                    <Paper
-                      key={player.id}
-                      elevation={0}
-                      sx={{
-                        ...softCard,
-                        p: 2.5,
-                        border: isActive
-                          ? '2px solid #7CB342'
-                          : isMe
-                          ? '2px solid rgba(66,165,245,0.5)'
-                          : '1px solid rgba(55,71,79,0.08)',
-                        boxShadow: isActive ? '0 8px 24px rgba(124,179,66,0.25)' : '0 2px 12px rgba(0,0,0,0.06)',
-                        transform: isActive ? 'scale(1.02)' : 'scale(1)',
-                        transition: 'all 300ms var(--spring)',
-                        animation: `riseIn 540ms ease-out ${pi * 120}ms backwards`,
-                        ...(nearFour && !hasFour ? { animation: 'dangerPulse 1.6s ease-in-out infinite' } : {}),
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-                        <Typography component="div" fontWeight={700} sx={{ fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 1 }}>
-                          {player.name}
-                          {isMe && (
-                            <Chip
-                              label="คุณ"
-                              size="small"
-                              sx={{ bgcolor: '#42A5F5', color: '#fff', height: 18, fontSize: '0.65rem' }}
-                            />
-                          )}
-                          {player.disconnected && (
-                            <Chip
-                              label="หลุด"
-                              size="small"
-                              sx={{ bgcolor: 'rgba(229,115,115,0.15)', color: '#E57373', height: 18, fontSize: '0.65rem' }}
-                            />
-                          )}
-                        </Typography>
-                        {isActive && (
-                          <Chip
-                            label="ตานี้"
-                            size="small"
-                            sx={{ bgcolor: '#7CB342', color: '#fff', fontSize: '0.7rem' }}
-                          />
-                        )}
+            {/* ─── Zone 2: the table ─── */}
+            <Box component="section" aria-label="โต๊ะเกม" sx={{ order: { xs: 1, lg: 2 }, minWidth: 0 }}>
+              <Box
+                className="wood"
+                sx={{
+                  position: 'relative',
+                  borderRadius: '32px',
+                  border: `3px solid ${T.woodDark}`,
+                  boxShadow: `${T.shInset}, 0 14px 30px rgba(48,46,40,0.22)`,
+                  p: { xs: 2, md: 3 },
+                  minHeight: 320,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  animation: shake ? 'tableShake 480ms ease-in-out' : undefined,
+                }}
+              >
+                {/* Thin inner border, as on a real board */}
+                <Box
+                  aria-hidden
+                  sx={{
+                    position: 'absolute',
+                    inset: 10,
+                    borderRadius: '24px',
+                    border: '2px solid rgba(255,249,238,0.14)',
+                    pointerEvents: 'none',
+                  }}
+                />
+                {/* Spotlight over the centre during a decision */}
+                <Box
+                  aria-hidden
+                  sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: '32px',
+                    pointerEvents: 'none',
+                    background:
+                      'radial-gradient(60% 55% at 50% 30%, rgba(255,249,238,0.20) 0%, transparent 70%)',
+                    opacity: currentAction ? 1 : 0.45,
+                    transition: 'opacity 300ms ease',
+                  }}
+                />
+
+                <Box sx={{ position: 'relative', textAlign: 'center' }}>
+                  {/* ── State A: a card is in the air, and it is aimed at me ── */}
+                  {awaitingMyDecision && currentAction && (
+                    <Box ref={decisionRef} sx={{ animation: 'placeIn 320ms var(--ease-out)' }}>
+                      <Typography sx={{ ...labelCaps, color: 'rgba(255,249,238,0.75)' }}>ไพ่ถึงมือคุณแล้ว</Typography>
+                      <Typography
+                        sx={{
+                          fontFamily: 'var(--font-display)',
+                          fontSize: 'clamp(1.4rem, 3.5vw, 2rem)',
+                          fontWeight: 700,
+                          color: T.paper,
+                          mb: 2,
+                        }}
+                      >
+                        {currentAction.from} บอกว่านี่คือ {currentAction.claim}
+                      </Typography>
+
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2.5, mb: 2.5 }}>
+                        <Box sx={{ textAlign: 'center' }}>
+                          <CreatureCard creature={currentAction.claim} size="lg" faceDown />
+                          <Typography sx={{ ...labelCaps, color: 'rgba(255,249,238,0.7)', mt: 1 }}>ไพ่จริง</Typography>
+                        </Box>
+                        <Box sx={{ textAlign: 'center' }}>
+                          <CreatureCard creature={currentAction.claim} size="lg" tilt={-2} />
+                          <Typography sx={{ ...labelCaps, color: 'rgba(255,249,238,0.7)', mt: 1 }}>คำกล่าวอ้าง</Typography>
+                        </Box>
                       </Box>
 
-                      <Box sx={{ display: 'flex', gap: 1.5, mb: player.deadCards.length > 0 ? 2 : 0 }}>
-                        <Box sx={{ flex: 1, bgcolor: 'rgba(66,165,245,0.08)', borderRadius: '1rem', p: 1.2, textAlign: 'center' }}>
-                          <Typography variant="caption" sx={{ color: '#78909C' }}>
-                            ไพ่ในมือ
-                          </Typography>
-                          <Typography variant="h5" fontWeight={700} sx={{ color: '#1E88E5' }}>
-                            {isMe ? myCards.length : player.cards.length}
-                          </Typography>
-                        </Box>
-                        <Box sx={{ flex: 1, bgcolor: hasFour ? 'rgba(229,115,115,0.12)' : 'rgba(255,204,128,0.2)', borderRadius: '1rem', p: 1.2, textAlign: 'center' }}>
-                          <Typography variant="caption" sx={{ color: '#78909C' }}>
-                            ไพ่สะสม
-                          </Typography>
-                          <Typography variant="h5" fontWeight={700} sx={{ color: hasFour ? '#E57373' : '#8D6E63' }}>
-                            {player.deadCards.length}
-                          </Typography>
-                        </Box>
+                      <Box
+                        sx={{
+                          display: 'grid',
+                          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                          gap: 1.5,
+                          maxWidth: 460,
+                          mx: 'auto',
+                        }}
+                      >
+                        <Button
+                          variant="contained"
+                          color="error"
+                          fullWidth
+                          startIcon={<GpsFixedRoundedIcon />}
+                          onClick={() => challenge(true)}
+                          sx={{ fontSize: '1rem' }}
+                        >
+                          จับโกหก
+                        </Button>
+                        <Button
+                          variant="contained"
+                          color="success"
+                          fullWidth
+                          startIcon={<VisibilityRoundedIcon />}
+                          onClick={() => challenge(false)}
+                          sx={{ fontSize: '1rem' }}
+                        >
+                          เชื่อว่าพูดจริง
+                        </Button>
                       </Box>
+                    </Box>
+                  )}
 
-                      {player.deadCards.length > 0 && (
-                        <>
-                          <Divider sx={{ mb: 1.5 }} />
-                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                            {Object.entries(animalCount).map(([animal, count]) => (
-                              <Tooltip key={animal} title={animal} placement="top">
-                                <Box
-                                  sx={{
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    gap: 0.3,
-                                    p: 0.6,
-                                    borderRadius: '0.75rem',
-                                    bgcolor: count >= 4 ? 'rgba(229,115,115,0.15)' : count === 3 ? 'rgba(255,204,128,0.3)' : 'rgba(55,71,79,0.04)',
-                                    border: count >= 4 ? '1.5px solid #E57373' : count === 3 ? '1.5px solid #FFB74D' : '1.5px solid transparent',
-                                  }}
-                                >
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={getAnimalImage(animal)}
-                                    alt={animal}
-                                    style={{ width: 34, height: 34, objectFit: 'contain' }}
-                                  />
-                                  <Typography
-                                    variant="caption"
-                                    fontWeight={700}
-                                    sx={{
-                                      color: count >= 4 ? '#E57373' : count === 3 ? '#EF6C00' : '#78909C',
-                                      lineHeight: 1,
-                                      fontSize: '0.7rem',
-                                    }}
-                                  >
-                                    ×{count}
-                                  </Typography>
-                                </Box>
-                              </Tooltip>
-                            ))}
+                  {/* ── State B: a card is in the air between two other people ── */}
+                  {currentAction && !awaitingMyDecision && (
+                    <Box sx={{ animation: 'placeIn 320ms var(--ease-out)' }}>
+                      <CreatureCard creature={currentAction.claim} size="lg" faceDown />
+                      <Typography sx={{ ...labelCaps, color: 'rgba(255,249,238,0.75)', mt: 2 }}>
+                        การ์ดกำลังลอยอยู่กลางโต๊ะ
+                      </Typography>
+                      <Typography
+                        sx={{
+                          fontFamily: 'var(--font-display)',
+                          fontSize: '1.25rem',
+                          fontWeight: 700,
+                          color: T.paper,
+                          mt: 0.5,
+                        }}
+                      >
+                        {currentAction.from} → {currentAction.to}
+                      </Typography>
+                      <Typography sx={{ color: 'rgba(255,249,238,0.8)', mt: 0.5 }}>
+                        อ้างว่าเป็น {currentAction.claim} · รอ {currentAction.to} ตัดสินใจ
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* ── State C: my turn, nothing in the air yet ── */}
+                  {!currentAction && isMyTurn && (
+                    <Box sx={{ animation: 'placeIn 320ms var(--ease-out)' }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={creatureImage(claim)}
+                        alt=""
+                        style={{ width: 84, height: 84, objectFit: 'contain', animation: 'bob 3s ease-in-out infinite' }}
+                      />
+                      <Typography
+                        sx={{
+                          fontFamily: 'var(--font-display)',
+                          fontSize: 'clamp(1.4rem, 3.5vw, 2rem)',
+                          fontWeight: 700,
+                          color: T.paper,
+                          mt: 1,
+                        }}
+                      >
+                        ตาของคุณแล้ว
+                      </Typography>
+                      <Typography sx={{ color: 'rgba(255,249,238,0.82)', mt: 0.5 }}>
+                        เลือกไพ่จากมือ ตั้งคำกล่าวอ้าง แล้วเลือกเหยื่อทางขวา
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* ── State D: waiting for someone else ── */}
+                  {!currentAction && !isMyTurn && (
+                    <Box>
+                      <Box sx={{ display: 'inline-flex', gap: -1, mb: 1.5 }}>
+                        {[-4, 0, 4].map((t, i) => (
+                          <Box key={t} sx={{ ml: i === 0 ? 0 : -5 }}>
+                            <CreatureCard creature="แมลงสาบ" size="sm" faceDown tilt={t} />
                           </Box>
-                          {(hasFour || nearFour) && (
-                            <Box
-                              sx={{
-                                mt: 1.5,
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 1,
-                                p: 1,
-                                borderRadius: '0.75rem',
-                                bgcolor: hasFour ? 'rgba(229,115,115,0.12)' : 'rgba(255,204,128,0.25)',
-                              }}
-                            >
-                              <WarningAmberRoundedIcon sx={{ fontSize: 18, color: hasFour ? '#E57373' : '#EF6C00' }} />
-                              <Typography variant="caption" fontWeight={600} sx={{ color: hasFour ? '#E57373' : '#EF6C00' }}>
-                                {hasFour ? 'มีสัตว์ 4 ตัวเหมือนกันแล้ว!' : 'อีกใบเดียวจะครบ 4 — ลุ้นหนักมาก'}
-                              </Typography>
-                            </Box>
-                          )}
-                        </>
-                      )}
-                    </Paper>
-                  );
-                })}
+                        ))}
+                      </Box>
+                      <Typography sx={{ ...labelCaps, color: 'rgba(255,249,238,0.75)' }}>กำลังรอ</Typography>
+                      <Typography
+                        sx={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', fontWeight: 700, color: T.paper }}
+                      >
+                        ตาของ {activePlayer?.name ?? '...'}
+                      </Typography>
+                      <Typography sx={{ color: 'rgba(255,249,238,0.75)', mt: 0.5, fontSize: '0.9rem' }}>
+                        ระหว่างนี้แซวเพื่อนไปก่อนได้
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+
+                {/* Taunts live on the table edge, never over the controls */}
+                <Box
+                  sx={{
+                    position: 'relative',
+                    mt: 2.5,
+                    pt: 2,
+                    borderTop: '2px solid rgba(255,249,238,0.14)',
+                  }}
+                >
+                  {tauntStrip}
+                </Box>
               </Box>
 
-              {/* ── MY CARDS ── */}
-              <Paper elevation={0} sx={{ ...softCard, p: 3, mb: 3 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography component="div" variant="h6" fontWeight={700} sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    <StyleRoundedIcon sx={{ color: '#7CB342' }} />
-                    ไพ่ในมือของคุณ
-                    <Chip
-                      label={myCards.length}
-                      size="small"
-                      sx={{ bgcolor: '#7CB342', color: '#fff', fontWeight: 700, height: 22 }}
-                    />
+              {/* ─── My hand ─── */}
+              <Box className="grain" sx={{ ...paperCard, p: { xs: 1.75, md: 2.25 }, mt: 2.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1.5 }}>
+                  <Typography sx={{ ...labelCaps }}>ไพ่ในมือคุณ</Typography>
+                  <Typography
+                    sx={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      px: 1,
+                      borderRadius: 'var(--r-pill)',
+                      bgcolor: 'rgba(95,122,58,0.16)',
+                      color: T.mossDark,
+                    }}
+                  >
+                    {myCards.length}
                   </Typography>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        size="small"
-                        checked={sortCards}
-                        onChange={(e) => setSortCards(e.target.checked)}
-                        color="primary"
-                      />
-                    }
-                    label={<Typography variant="caption">จัดเรียงไพ่</Typography>}
-                  />
+                  <Box sx={{ flex: 1 }} />
+                  <Button
+                    size="small"
+                    variant={sortHand ? 'contained' : 'outlined'}
+                    startIcon={<SortRoundedIcon />}
+                    onClick={() => setSortHand((v) => !v)}
+                    sx={{ py: 0.5, px: 1.5, fontSize: '0.78rem', minHeight: 36 }}
+                  >
+                    เรียงไพ่
+                  </Button>
                 </Box>
 
                 {myCards.length === 0 ? (
-                  <Typography sx={{ color: '#B0BEC5', textAlign: 'center', py: 3 }}>
-                    ไม่มีไพ่ในมือ
-                  </Typography>
+                  <Typography sx={{ color: T.taupe, textAlign: 'center', py: 3 }}>ไม่มีไพ่ในมือแล้ว</Typography>
                 ) : (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, justifyContent: 'center' }}>
-                    {(sortCards
-                      ? [...myCards].sort((a, b) => a.animal.localeCompare(b.animal, 'th'))
-                      : myCards
-                    ).map((card) => {
-                      const isSelected = selectedCard === card.id;
-                      const clickable = isMyTurn && !currentAction;
-                      return (
-                        <Tooltip key={card.id} title={card.animal} placement="top">
-                          <Paper
-                            elevation={0}
-                            onClick={() => clickable && setSelectedCard(isSelected ? null : card.id)}
-                            sx={{
-                              position: 'relative',
-                              width: 88,
-                              py: 1.5,
-                              px: 1,
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              gap: 0.5,
-                              borderRadius: '1rem',
-                              cursor: clickable ? 'pointer' : 'default',
-                              border: isSelected ? '2px solid #7CB342' : '1.5px solid rgba(55,71,79,0.1)',
-                              bgcolor: isSelected ? 'rgba(124,179,66,0.08)' : '#fff',
-                              boxShadow: isSelected
-                                ? '0 12px 24px rgba(124,179,66,0.3)'
-                                : '0 2px 8px rgba(0,0,0,0.06)',
-                              transform: isSelected ? 'translateY(-10px)' : 'none',
-                              transition: 'all 200ms var(--spring)',
-                              '&:hover': clickable && !isSelected
-                                ? { transform: 'translateY(-6px) scale(1.03)', boxShadow: '0 8px 16px rgba(55,71,79,0.15)' }
-                                : {},
-                            }}
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={getAnimalImage(card.animal)}
-                              alt={card.animal}
-                              style={{
-                                width: 56,
-                                height: 56,
-                                objectFit: 'contain',
-                                animation: isSelected ? 'wobble 0.6s ease-in-out infinite' : 'none',
-                              }}
-                            />
-                            <Typography variant="caption" fontWeight={600} sx={{ color: '#78909C' }}>
-                              {card.animal}
-                            </Typography>
-                            {isSelected && (
-                              <Box
-                                sx={{
-                                  position: 'absolute',
-                                  top: -9,
-                                  right: -9,
-                                  width: 24,
-                                  height: 24,
-                                  borderRadius: '50%',
-                                  bgcolor: '#7CB342',
-                                  color: '#fff',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  animation: 'popIn 300ms var(--spring)',
-                                }}
-                              >
-                                <CheckRoundedIcon sx={{ fontSize: 16 }} />
-                              </Box>
-                            )}
-                          </Paper>
-                        </Tooltip>
-                      );
-                    })}
-                  </Box>
-                )}
-              </Paper>
-
-              {/* ── TURN ACTIONS ── */}
-              {isMyTurn && myCards.length > 0 && !currentAction && selectedCard && (
-                <Paper
-                  elevation={0}
-                  sx={{
-                    ...softCard,
-                    p: 3,
-                    mb: 3,
-                    border: '2px solid rgba(124,179,66,0.4)',
-                    animation: 'riseIn 400ms ease-out',
-                  }}
-                >
-                  <Typography variant="h6" fontWeight={700} textAlign="center" sx={{ mb: 3, color: '#558B2F' }}>
-                    ตาของคุณ — จะอ้างว่าเป็นตัวอะไร แล้วส่งให้ใครดี?
-                  </Typography>
-
-                  <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1.5, color: '#78909C' }}>
-                    อ้างว่าเป็น (โกหกได้นะ เขาไม่รู้หรอก):
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mb: 3 }}>
-                    {ANIMALS.map((animal) => (
-                      <Button
-                        key={animal}
-                        variant={selectedAnimal === animal ? 'contained' : 'outlined'}
-                        size="small"
-                        onClick={() => setSelectedAnimal(animal)}
-                        startIcon={
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={getAnimalImage(animal)}
-                            alt={animal}
-                            style={{ width: 20, height: 20, objectFit: 'contain' }}
-                          />
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      gap: 1,
+                      flexWrap: { xs: 'nowrap', md: 'wrap' },
+                      overflowX: { xs: 'auto', md: 'visible' },
+                      pt: 2,
+                      pb: 1.5,
+                      justifyContent: { xs: 'flex-start', md: 'center' },
+                      '&::-webkit-scrollbar': { height: 6 },
+                      '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(123,90,62,0.3)', borderRadius: 3 },
+                    }}
+                  >
+                    {handCards.map((card, i) => (
+                      <CreatureCard
+                        key={card.id}
+                        creature={card.animal}
+                        selected={selectedCard === card.id}
+                        disabled={!isMyTurn || Boolean(currentAction)}
+                        tilt={((i % 7) - 3) * 1.1}
+                        onClick={
+                          isMyTurn && !currentAction
+                            ? () => setSelectedCard((prev) => (prev === card.id ? null : card.id))
+                            : undefined
                         }
-                        sx={
-                          selectedAnimal === animal
-                            ? { px: 2 }
-                            : {
-                                px: 2,
-                                borderColor: 'rgba(55,71,79,0.2)',
-                                color: '#78909C',
-                                '&:hover': { borderColor: '#7CB342', color: '#558B2F', bgcolor: 'rgba(124,179,66,0.06)' },
-                              }
-                        }
-                      >
-                        {animal}
-                      </Button>
+                      />
                     ))}
                   </Box>
+                )}
+              </Box>
+            </Box>
 
-                  <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1.5, color: '#78909C' }}>
-                    ส่งให้เหยื่อคนไหน:
+            {/* ─── Zone 3: actions, log, chat ─── */}
+            <Box
+              component="section"
+              aria-label="แผงควบคุม"
+              sx={{ order: 3, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}
+            >
+              {/* Send controls appear only when there is something to send */}
+              {isMyTurn && !currentAction && myCards.length > 0 && (
+                <Box
+                  className="grain"
+                  sx={{
+                    ...paperCard,
+                    p: 2,
+                    border: `2px solid ${T.moss}`,
+                    animation: 'placeIn 300ms var(--ease-out)',
+                  }}
+                >
+                  <Typography sx={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', fontWeight: 700, mb: 0.25 }}>
+                    ส่งไพ่ให้ใครสักคน
                   </Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mb: 3 }}>
+                  <Typography sx={{ color: T.taupe, fontSize: '0.82rem', mb: 2 }}>
+                    {selectedCard ? 'เลือกสัตว์ที่จะอ้าง แล้วเลือกเป้าหมาย' : 'แตะไพ่ในมือของคุณก่อน'}
+                  </Typography>
+
+                  <Typography sx={{ ...labelCaps, display: 'block', mb: 1 }}>อ้างว่าเป็น</Typography>
+                  <Box sx={{ mb: 2, opacity: selectedCard ? 1 : 0.5, pointerEvents: selectedCard ? 'auto' : 'none' }}>
+                    <CreatureSelector value={claim} onChange={setClaim} />
+                  </Box>
+
+                  <Typography sx={{ ...labelCaps, display: 'block', mb: 1 }}>ส่งให้</Typography>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 1,
+                      mb: 2,
+                      opacity: selectedCard ? 1 : 0.5,
+                      pointerEvents: selectedCard ? 'auto' : 'none',
+                    }}
+                  >
                     {room.players
                       .filter((p) => p.id !== playerId)
-                      .map((player) => (
-                        <Button
-                          key={player.id}
-                          variant={selectedPlayer === player.id ? 'contained' : 'outlined'}
-                          color="secondary"
-                          onClick={() => setSelectedPlayer(player.id)}
-                          sx={
-                            selectedPlayer === player.id
-                              ? { px: 3 }
-                              : {
-                                  px: 3,
-                                  borderColor: 'rgba(55,71,79,0.2)',
-                                  color: '#78909C',
-                                  '&:hover': { borderColor: '#42A5F5', color: '#1E88E5', bgcolor: 'rgba(66,165,245,0.06)' },
-                                }
-                          }
-                        >
-                          {player.name}
-                        </Button>
-                      ))}
+                      .map((p) => {
+                        const seat = room.players.findIndex((x) => x.id === p.id);
+                        const active = selectedTarget === p.id;
+                        return (
+                          <Box
+                            key={p.id}
+                            component="button"
+                            type="button"
+                            aria-pressed={active}
+                            onClick={() => setSelectedTarget(p.id)}
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1,
+                              px: 1.25,
+                              py: 1,
+                              minHeight: 48,
+                              font: 'inherit',
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                              borderRadius: 'var(--r-sm)',
+                              bgcolor: active ? 'rgba(217,164,65,0.18)' : T.paper,
+                              border: `2px solid ${active ? T.mustard : T.stroke}`,
+                              boxShadow: active ? '0 4px 0 rgba(169,119,31,0.5)' : '0 3px 0 rgba(80,58,38,0.12)',
+                              transition: 'transform 160ms var(--spring)',
+                              '&:hover': { transform: 'translateY(-2px)' },
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                width: 26,
+                                height: 26,
+                                flexShrink: 0,
+                                borderRadius: '50%',
+                                bgcolor: playerColor(seat),
+                                color: T.paper,
+                                display: 'grid',
+                                placeItems: 'center',
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                              }}
+                            >
+                              {seat + 1}
+                            </Box>
+                            <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {p.name}
+                            </Typography>
+                            {active && <CheckRoundedIcon sx={{ ml: 'auto', fontSize: 18, color: '#A9771F' }} />}
+                          </Box>
+                        );
+                      })}
                   </Box>
 
                   <Button
                     variant="contained"
-                    color="secondary"
                     fullWidth
-                    size="large"
                     endIcon={<SendRoundedIcon />}
                     onClick={sendCard}
-                    disabled={!selectedPlayer}
-                    sx={{ py: 1.6, fontSize: '1.05rem' }}
+                    disabled={!selectedCard || !selectedTarget}
                   >
-                    ส่งไพ่พร้อมหน้านิ่งที่สุดในชีวิต
+                    ส่งไพ่
                   </Button>
-                </Paper>
+                </Box>
               )}
 
-              {/* ── CHALLENGE ACTIONS ── */}
-              {isMyTurn && currentAction && currentAction.toId === playerId && (
-                <Paper
-                  ref={challengeActionsRef}
-                  elevation={0}
-                  sx={{
-                    ...softCard,
-                    p: { xs: 3, md: 4 },
-                    mb: 3,
-                    border: '2px solid #FFB74D',
-                    boxShadow: '0 12px 32px rgba(255,183,77,0.25)',
-                    textAlign: 'center',
-                    animation: 'popIn 400ms var(--spring)',
-                  }}
-                >
-                  <Typography variant="h5" fontWeight={700} sx={{ mb: 1 }}>
-                    คุณได้รับไพ่ปริศนา!
-                  </Typography>
-                  <Typography component="div" variant="body1" sx={{ mb: 2, color: '#78909C' }}>
-                    <Box component="strong" sx={{ color: '#37474F' }}>{currentAction.from}</Box> บอกว่ามันคือ...
-                  </Typography>
-
-                  {/* claimed animal card */}
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      display: 'inline-flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: 1,
-                      px: 4,
-                      py: 2.5,
-                      mb: 3,
-                      borderRadius: '1.5rem',
-                      bgcolor: 'rgba(255,204,128,0.2)',
-                      border: '2px dashed #FFB74D',
-                      boxShadow: 'none',
-                      animation: 'bob 3s ease-in-out infinite',
-                    }}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={getAnimalImage(currentAction.claim)}
-                      alt={currentAction.claim}
-                      style={{ width: 84, height: 84, objectFit: 'contain' }}
-                    />
-                    <Typography variant="h6" fontWeight={700} sx={{ color: '#8D6E63' }}>
-                      {currentAction.claim}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: '#9E9E9E' }}>
-                      (ตามคำกล่าวอ้าง... ซึ่งอาจมั่ว)
-                    </Typography>
-                  </Paper>
-
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 2, mb: 3 }}>
-                    <Button
-                      variant="contained"
-                      fullWidth
-                      size="large"
-                      startIcon={<ClearRoundedIcon />}
-                      onClick={() => handleChallenge(true)}
-                      sx={{
-                        py: 1.8,
-                        fontSize: '1.05rem',
-                        bgcolor: '#E57373',
-                        '&:hover': { bgcolor: '#D66161', boxShadow: '0 6px 16px rgba(229,115,115,0.35)', transform: 'translateY(-2px)' },
-                      }}
-                    >
-                      โกหกชัดๆ!
-                    </Button>
-                    <Button
-                      variant="contained"
-                      fullWidth
-                      size="large"
-                      startIcon={<CheckRoundedIcon />}
-                      onClick={() => handleChallenge(false)}
-                      sx={{ py: 1.8, fontSize: '1.05rem' }}
-                    >
-                      เชื่อว่าจริง
-                    </Button>
-                  </Box>
-
-                  {/* ── เครื่องจับโกหก (กวนๆ) ── */}
-                  <Divider sx={{ mb: 2 }}>
-                    <Chip
-                      label="ตัวช่วย (ที่ช่วยอะไรไม่ได้)"
-                      size="small"
-                      sx={{ bgcolor: 'rgba(141,110,99,0.1)', color: '#8D6E63', fontSize: '0.7rem' }}
-                    />
-                  </Divider>
+              {/* The joke lie detector, available while deciding */}
+              {awaitingMyDecision && (
+                <Box className="grain" sx={{ ...paperCard, p: 2, textAlign: 'center' }}>
+                  <Typography sx={{ ...labelCaps, display: 'block', mb: 1 }}>ตัวช่วยที่ช่วยอะไรไม่ได้</Typography>
                   <Button
                     variant="outlined"
-                    size="small"
+                    fullWidth
                     startIcon={
                       <RadarRoundedIcon
-                        sx={detectorState === 'scanning' ? { animation: 'needleSweep 0.8s ease-in-out infinite' } : {}}
+                        sx={detectorState === 'scanning' ? { animation: 'needleSweep 0.8s ease-in-out infinite' } : undefined}
                       />
                     }
                     onClick={runLieDetector}
                     disabled={detectorState === 'scanning'}
-                    sx={{
-                      borderColor: 'rgba(141,110,99,0.4)',
-                      color: '#8D6E63',
-                      '&:hover': { borderColor: '#8D6E63', bgcolor: 'rgba(141,110,99,0.06)' },
-                    }}
+                    sx={{ fontSize: '0.85rem' }}
                   >
-                    {detectorState === 'scanning' ? 'กำลังสแกนความตอแหล...' : 'ใช้เครื่องจับโกหก (แม่นยำ 50/50)'}
+                    {detectorState === 'scanning' ? 'กำลังสแกน' : 'เครื่องจับโกหก (แม่น 50/50)'}
                   </Button>
                   {detectorState === 'done' && detectorVerdict && (
                     <Typography
-                      variant="body2"
-                      fontWeight={600}
-                      sx={{ mt: 1.5, color: '#8D6E63', animation: 'popIn 400ms var(--spring)' }}
+                      sx={{ mt: 1.25, fontWeight: 700, fontSize: '0.85rem', color: T.wood, animation: 'tokenPop 300ms var(--spring)' }}
                     >
-                      ผลวิเคราะห์: {detectorVerdict}
+                      {detectorVerdict}
                     </Typography>
                   )}
-                </Paper>
+                </Box>
               )}
 
-              {/* ── WAITING FOR TURN ── */}
-              {!isMyTurn && (
-                <Paper elevation={0} sx={{ ...softCard, p: 3, mb: 3, textAlign: 'center' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
-                    <CircularProgress size={20} sx={{ color: '#7CB342' }} />
-                    <Typography component="div" variant="h6" fontWeight={500} sx={{ color: '#78909C' }}>
-                      รอตาของ{' '}
-                      <Box component="strong" sx={{ color: '#558B2F' }}>
-                        {room.players.find((p) => p.id === room.currentPlayer)?.name}
-                      </Box>
-                      {' '}— ระหว่างนี้กดแซวได้ที่แถบด้านล่าง
-                    </Typography>
-                  </Box>
-                </Paper>
-              )}
-            </Box>
+              <GameLog entries={logs} maxHeight={280} />
 
-            {/* ── LOGS SIDEBAR ── */}
-            <Box sx={{ width: { xs: '100%', lg: 340 }, flexShrink: 0, order: { xs: -1, lg: 0 } }}>
-              <Box
-                sx={{
-                  position: { lg: 'sticky' },
-                  top: { lg: 80 },
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 2,
-                }}
-              >
-              {/* ── ปุ่มเริ่มใหม่ (เฉพาะหัวหน้าห้อง): ปิดห้องนี้ เตะทุกคนออก แล้วสร้างห้องใหม่ ── */}
-              {room.players[0]?.id === playerId && (
+              <ChatPanel
+                messages={chatMessages}
+                myId={playerId}
+                value={chatInput}
+                onChange={setChatInput}
+                onSend={sendChat}
+                height={180}
+              />
+
+              {isHost && (
                 <Button
                   variant="outlined"
                   fullWidth
                   startIcon={<RestartAltRoundedIcon />}
                   onClick={restartGame}
-                  sx={{
-                    py: 1.2,
-                    borderColor: 'rgba(229,115,115,0.5)',
-                    color: '#E57373',
-                    bgcolor: 'rgba(255,255,255,0.7)',
-                    '&:hover': {
-                      borderColor: '#E57373',
-                      bgcolor: 'rgba(229,115,115,0.08)',
-                    },
-                  }}
+                  sx={{ borderColor: T.accuse, color: T.accuse, fontSize: '0.85rem', '&:hover': { borderColor: T.accuse, bgcolor: 'rgba(184,74,58,0.08)' } }}
                 >
-                  เริ่มใหม่ (สร้างห้องใหม่ เตะทุกคนออก)
+                  ปิดห้องนี้ แล้วเปิดห้องใหม่
                 </Button>
               )}
-              <Paper
-                elevation={0}
-                sx={{
-                  ...softCard,
-                  p: 2.5,
-                  maxHeight: { xs: 280, lg: '42vh' },
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-              >
-                <Typography
-                  component="div"
-                  variant="h6"
-                  fontWeight={700}
-                  sx={{ mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}
-                >
-                  <HistoryRoundedIcon sx={{ color: '#7CB342' }} />
-                  ประวัติการเล่น
-                </Typography>
-
-                <Box
-                  ref={logsBoxRef}
-                  sx={{
-                    flex: 1,
-                    overflowY: 'auto',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 1.5,
-                    pr: 0.5,
-                    '&::-webkit-scrollbar': { width: 4 },
-                    '&::-webkit-scrollbar-track': { bgcolor: 'rgba(55,71,79,0.05)', borderRadius: 2 },
-                    '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(124,179,66,0.4)', borderRadius: 2 },
-                  }}
-                >
-                  {gameLogs.length === 0 ? (
-                    <Typography
-                      variant="body2"
-                      sx={{ color: '#B0BEC5', textAlign: 'center', fontStyle: 'italic', py: 4 }}
-                    >
-                      ยังไม่มีใครโกหกใคร... เดี๋ยวก็มี
-                    </Typography>
-                  ) : (
-                    gameLogs.map((log) => (
-                      <Box
-                        key={log.id}
-                        sx={{
-                          p: 1.5,
-                          borderRadius: '0.75rem',
-                          bgcolor: `${LOG_COLORS[log.type]}14`,
-                          borderLeft: `3px solid ${LOG_COLORS[log.type]}`,
-                          animation: 'riseIn 300ms ease-out',
-                        }}
-                      >
-                        <Typography variant="body2" sx={{ lineHeight: 1.5, mb: 0.5 }}>
-                          {log.message}
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: '#B0BEC5' }}>
-                          {log.timestamp.toLocaleTimeString('th-TH', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit',
-                          })}
-                        </Typography>
-                      </Box>
-                    ))
-                  )}
-                </Box>
-              </Paper>
-
-              {chatPanel}
-              </Box>
             </Box>
           </Box>
         )}
       </Box>
 
-      {/* ══════════ TAUNT BAR (แถบแซวเพื่อน) ══════════ */}
-      {gameState === 'playing' && (
+      {/* ══════════ REVEAL: the flip, then the stamp ══════════ */}
+      {reveal && (
         <Box
           sx={{
             position: 'fixed',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            zIndex: 200,
-            bgcolor: 'rgba(250,250,250,0.9)',
-            backdropFilter: 'blur(12px)',
-            borderTop: '1px solid rgba(55,71,79,0.08)',
-            px: 2,
-            py: 1.5,
+            inset: 0,
+            zIndex: 280,
+            display: 'grid',
+            placeItems: 'center',
+            p: 3,
+            bgcolor: 'rgba(48,46,40,0.62)',
           }}
+          onClick={() => setReveal(null)}
         >
-          <Box sx={{ maxWidth: 1400, mx: 'auto', display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <TheaterComedyRoundedIcon sx={{ color: '#8D6E63', flexShrink: 0 }} />
-            <Box
-              sx={{
-                display: 'flex',
-                gap: 1,
-                overflowX: 'auto',
-                pb: 0.5,
-                '&::-webkit-scrollbar': { height: 0 },
-              }}
-            >
-              {TAUNTS.map((t) => (
-                <Chip
-                  key={t}
-                  label={t}
-                  onClick={() => sendTaunt(t)}
-                  sx={{
-                    bgcolor: '#fff',
-                    border: '1.5px solid rgba(141,110,99,0.25)',
-                    color: '#8D6E63',
-                    flexShrink: 0,
-                    cursor: 'pointer',
-                    transition: 'all 200ms var(--spring)',
-                    '&:hover': {
-                      bgcolor: 'rgba(255,204,128,0.35)',
-                      borderColor: '#FFB74D',
-                      transform: 'translateY(-2px)',
-                    },
-                  }}
-                />
-              ))}
+          <Box
+            className="grain"
+            sx={{
+              ...paperCard,
+              position: 'relative',
+              maxWidth: 460,
+              width: '100%',
+              p: { xs: 3, md: 4 },
+              textAlign: 'center',
+              boxShadow: T.shRaised,
+              animation: 'placeIn 320ms var(--ease-out)',
+            }}
+          >
+            <Typography sx={{ ...labelCaps, display: 'block', mb: 2 }}>เปิดไพ่</Typography>
+
+            {/* Flip: back → actual creature, perspective on the parent */}
+            <Box sx={{ perspective: '1000px', display: 'grid', placeItems: 'center', mb: 2.5 }}>
+              <Box
+                sx={{
+                  position: 'relative',
+                  width: 132,
+                  height: 184,
+                  transformStyle: 'preserve-3d',
+                  transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                  transition: 'transform 420ms var(--ease-out)',
+                }}
+              >
+                <Box sx={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden' }}>
+                  <CreatureCard creature={reveal.claimedAnimal} size="lg" faceDown />
+                </Box>
+                <Box sx={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+                  <CreatureCard creature={reveal.actualAnimal} size="lg" />
+                </Box>
+              </Box>
             </Box>
+
+            {flipped && (
+              <Box sx={{ animation: 'placeIn 300ms var(--ease-out)' }}>
+                <Typography sx={{ color: T.taupe, fontSize: '0.88rem', mb: 0.5 }}>
+                  อ้างว่าเป็น {reveal.claimedAnimal} · ไพ่จริงคือ{' '}
+                  <Box component="strong" sx={{ color: getCreature(reveal.actualAnimal).tint }}>
+                    {reveal.actualAnimal}
+                  </Box>
+                </Typography>
+
+                {/* Result stamp — icon and words, not color alone */}
+                <Box
+                  sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    px: 2,
+                    py: 0.75,
+                    my: 1.5,
+                    borderRadius: 'var(--r-sm)',
+                    border: `3px solid ${reveal.guessCorrect ? T.leaf : T.accuse}`,
+                    color: reveal.guessCorrect ? T.leaf : T.accuse,
+                    animation: 'stampDown 400ms var(--spring)',
+                  }}
+                >
+                  {reveal.guessCorrect ? <CheckRoundedIcon /> : <GpsFixedRoundedIcon />}
+                  <Typography sx={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', fontWeight: 700 }}>
+                    {reveal.guessCorrect ? 'ทายถูก' : 'ทายผิด'}
+                  </Typography>
+                </Box>
+
+                <Typography sx={{ fontWeight: 600 }}>{reveal.message}</Typography>
+
+                <Button variant="outlined" onClick={() => setReveal(null)} sx={{ mt: 2.5 }}>
+                  เข้าใจแล้ว
+                </Button>
+              </Box>
+            )}
           </Box>
         </Box>
       )}
 
-      {/* ══════════ EMOTE BUBBLES ══════════ */}
+      {/* ══════════ Emote bubbles ══════════ */}
       <Box
+        aria-hidden
         sx={{
           position: 'fixed',
-          bottom: 88,
+          bottom: 20,
           left: 16,
           zIndex: 250,
           display: 'flex',
@@ -1619,47 +1520,39 @@ export default function GamePage() {
         }}
       >
         {emotes.map((e) => (
-          <Paper
+          <Box
             key={e.id}
-            elevation={0}
             sx={{
-              px: 2,
-              py: 1,
-              borderRadius: '1rem 1rem 1rem 0.25rem',
-              bgcolor: '#fff',
-              border: '1.5px solid rgba(141,110,99,0.3)',
-              boxShadow: '0 8px 24px rgba(55,71,79,0.15)',
+              px: 1.5,
+              py: 0.9,
+              borderRadius: '16px 16px 16px 4px',
+              bgcolor: T.paper,
+              border: `2px solid ${T.stroke}`,
+              boxShadow: T.shCard,
               animation: 'bubbleUp 4.2s ease-in-out forwards',
             }}
           >
-            <Typography variant="caption" fontWeight={700} sx={{ color: '#8D6E63', display: 'block' }}>
-              {e.from}
-            </Typography>
-            <Typography variant="body2" fontWeight={500}>
-              {e.text}
-            </Typography>
-          </Paper>
+            <Typography sx={{ fontSize: '0.68rem', fontWeight: 800, color: T.wood }}>{e.from}</Typography>
+            <Typography sx={{ fontSize: '0.88rem', fontWeight: 600 }}>{e.text}</Typography>
+          </Box>
         ))}
       </Box>
 
-      {/* ══════════ GAME OVER: ฝนแมลงสาบ + ฉายาผู้แพ้ ══════════ */}
+      {/* ══════════ Game over ══════════ */}
       {gameOverInfo && (
         <Box
           sx={{
             position: 'fixed',
             inset: 0,
             zIndex: 300,
-            bgcolor: 'rgba(55,71,79,0.55)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            display: 'grid',
+            placeItems: 'center',
             p: 3,
             overflow: 'hidden',
+            bgcolor: 'rgba(48,46,40,0.7)',
           }}
         >
-          {/* cockroach rain */}
-          {Array.from({ length: 16 }).map((_, i) => (
+          {Array.from({ length: 14 }).map((_, i) => (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               key={i}
@@ -1668,30 +1561,33 @@ export default function GamePage() {
               style={{
                 position: 'absolute',
                 top: 0,
-                left: `${(i * 61) % 100}%`,
-                width: 32 + ((i * 13) % 28),
-                height: 32 + ((i * 13) % 28),
+                left: `${(i * 67) % 100}%`,
+                width: 30 + ((i * 13) % 26),
+                height: 30 + ((i * 13) % 26),
                 objectFit: 'contain',
-                animation: `roachFall ${2.6 + ((i * 7) % 20) / 10}s linear ${((i * 11) % 24) / 10}s infinite`,
+                animation: `scatter ${2.8 + ((i * 7) % 18) / 10}s linear ${((i * 11) % 22) / 10}s infinite`,
                 pointerEvents: 'none',
               }}
             />
           ))}
 
-          <Paper
-            elevation={0}
+          <Box
+            className="grain"
             sx={{
+              ...paperCard,
               position: 'relative',
               maxWidth: 440,
               width: '100%',
-              p: { xs: 4, md: 5 },
+              p: { xs: 3, md: 4 },
               textAlign: 'center',
-              animation: 'popIn 500ms var(--spring)',
+              boxShadow: T.shRaised,
+              animation: 'placeIn 380ms var(--ease-out)',
             }}
           >
             <IconButton
               onClick={() => setGameOverInfo(null)}
-              sx={{ position: 'absolute', top: 12, right: 12, color: '#9E9E9E' }}
+              aria-label="ปิด"
+              sx={{ position: 'absolute', top: 8, right: 8, color: T.taupe }}
             >
               <CloseRoundedIcon />
             </IconButton>
@@ -1700,33 +1596,130 @@ export default function GamePage() {
             <img
               src="/Cockroach.png"
               alt=""
-              style={{ width: 96, height: 96, objectFit: 'contain', animation: 'wobble 0.8s ease-in-out infinite' }}
+              style={{ width: 88, height: 88, objectFit: 'contain', animation: 'wobble 0.9s ease-in-out infinite' }}
             />
-            <Typography variant="h4" fontWeight={700} sx={{ mt: 2, mb: 1 }}>
-              จบเกม!
+            <Typography sx={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 700, mt: 1.5 }}>
+              จบเกม
             </Typography>
-            <Typography variant="body1" sx={{ color: '#78909C', mb: 2 }}>
-              <Box component="strong" sx={{ color: '#E57373' }}>{gameOverInfo.loser}</Box> แพ้เพราะ{gameOverInfo.reason}
+            <Typography sx={{ color: T.taupe, mb: 2 }}>
+              <Box component="strong" sx={{ color: T.accuse }}>{gameOverInfo.loser}</Box> แพ้เพราะ{gameOverInfo.reason}
             </Typography>
-            <Chip
-              label={`ได้รับฉายา: ${gameOverInfo.title}`}
+            <Box
               sx={{
-                bgcolor: 'rgba(255,204,128,0.35)',
-                color: '#8D6E63',
-                fontWeight: 700,
-                px: 1,
-                py: 2.2,
+                display: 'inline-block',
+                px: 2,
+                py: 1,
                 mb: 3,
+                borderRadius: 'var(--r-sm)',
+                bgcolor: 'rgba(217,164,65,0.22)',
+                border: `2px solid ${T.mustard}`,
               }}
-            />
-            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
-              <Button variant="contained" onClick={() => setGameOverInfo(null)} sx={{ px: 4 }}>
-                กลับห้องรอ เล่นใหม่อีกรอบ
-              </Button>
+            >
+              <Typography sx={{ ...labelCaps, mb: 0.25 }}>ฉายาที่ได้รับ</Typography>
+              <Typography sx={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', fontWeight: 700, color: T.wood }}>
+                {gameOverInfo.title}
+              </Typography>
             </Box>
-          </Paper>
+            <Button variant="contained" fullWidth onClick={() => setGameOverInfo(null)}>
+              กลับห้องรอ เล่นใหม่อีกรอบ
+            </Button>
+          </Box>
         </Box>
       )}
+
+      {/* ══════════ Rules: an instruction sheet, not a glass modal ══════════ */}
+      <Dialog
+        open={rulesOpen}
+        onClose={() => setRulesOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{ paper: { className: 'grain', sx: { ...paperCard, boxShadow: T.shRaised } } }}
+      >
+        <Box sx={{ p: { xs: 3, md: 4 }, position: 'relative' }}>
+          {/* A strip of tape at the top, like a rule card pinned to the box lid */}
+          <Box
+            aria-hidden
+            sx={{
+              position: 'absolute',
+              top: -10,
+              left: '50%',
+              transform: 'translateX(-50%) rotate(-2deg)',
+              width: 96,
+              height: 22,
+              bgcolor: 'rgba(217,164,65,0.5)',
+              border: '1px solid rgba(169,119,31,0.4)',
+            }}
+          />
+          <IconButton
+            onClick={() => setRulesOpen(false)}
+            aria-label="ปิดกติกา"
+            sx={{ position: 'absolute', top: 10, right: 10, color: T.taupe }}
+          >
+            <CloseRoundedIcon />
+          </IconButton>
+
+          <Typography sx={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', fontWeight: 700, mb: 2.5 }}>
+            กติกาบนโต๊ะนี้
+          </Typography>
+
+          {[
+            { n: '1', title: 'ส่งการ์ด', body: 'ในตาของคุณ เลือกการ์ด 1 ใบ วางคว่ำส่งให้เพื่อน แล้วบอกว่ามันคือตัวอะไร จะพูดจริงหรือโกหกก็ได้' },
+            { n: '2', title: 'ตัดสินใจ', body: 'คนที่ได้รับต้องเลือกว่าจะจับโกหก หรือเชื่อว่าพูดจริง แล้วเปิดการ์ดพิสูจน์' },
+            { n: '3', title: 'รับกรรม', body: 'ฝ่ายที่ผิดต้องเก็บการ์ดใบนั้นวางหงายไว้หน้าตัวเอง แล้วเป็นคนเล่นตาต่อไป' },
+            { n: '4', title: 'เงื่อนไขแพ้', body: 'สะสมสัตว์ชนิดเดียวกันครบ 4 ใบ หรือครบทั้ง 8 ชนิด หรือไพ่ในมือหมด คุณแพ้ทันที' },
+          ].map((r) => (
+            <Box key={r.n} sx={{ display: 'flex', gap: 1.5, mb: 2 }}>
+              <Box
+                sx={{
+                  width: 32,
+                  height: 32,
+                  flexShrink: 0,
+                  borderRadius: '50%',
+                  bgcolor: T.moss,
+                  color: T.paper,
+                  display: 'grid',
+                  placeItems: 'center',
+                  fontFamily: 'var(--font-mono)',
+                  fontWeight: 700,
+                  boxShadow: '0 3px 0 rgba(75,97,45,1)',
+                }}
+              >
+                {r.n}
+              </Box>
+              <Box>
+                <Typography sx={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.05rem' }}>
+                  {r.title}
+                </Typography>
+                <Typography sx={{ color: T.taupe, fontSize: '0.9rem' }}>{r.body}</Typography>
+              </Box>
+            </Box>
+          ))}
+
+          <Box sx={{ mt: 3, pt: 2.5, borderTop: `2px solid ${T.stroke}` }}>
+            <Typography sx={{ ...labelCaps, display: 'block', mb: 1.25 }}>สัตว์ทั้ง 8 ชนิด</Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {CREATURE_NAMES.map((n) => (
+                <Box
+                  key={n}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    px: 1,
+                    py: 0.5,
+                    borderRadius: 'var(--r-pill)',
+                    border: `1.5px solid ${T.stroke}`,
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={creatureImage(n)} alt="" style={{ width: 22, height: 22, objectFit: 'contain' }} />
+                  <Typography sx={{ fontSize: '0.8rem', fontWeight: 700 }}>{n}</Typography>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        </Box>
+      </Dialog>
     </Box>
   );
 }

@@ -1,93 +1,120 @@
 'use client';
 import { createTheme } from '@mui/material/styles';
 
-// ── Mini World palette (DESIGN.md) ─────────────────────────────
-// Grass Green #7CB342 · Sky Blue #42A5F5 · Warm Sand #FFCC80
-// Brick Red #E57373 · Soft White #FAFAFA · Stone Grey #9E9E9E
-// Water Blue #29B6F6 · Wood Brown #8D6E63
+// ── Cockroach Table palette (DESIGN.md) ────────────────────────
+// Moss Green #5F7A3A · Mustard Gold #D9A441 · Burnt Orange #D9824B
+// Accusation Red #B84A3A · Leaf Green #6B8E5A · Paper Cream #FFF9EE
+// Table Beige #F3E9D7 · Charcoal Brown #302E28 · Wood Brown #7B5A3E
+
+export const T = {
+  moss: '#5F7A3A',
+  mossDark: '#4B612D',
+  mustard: '#D9A441',
+  burnt: '#D9824B',
+  accuse: '#B84A3A',
+  accuseDark: '#9C3C2E',
+  leaf: '#6B8E5A',
+  paper: '#FFF9EE',
+  table: '#F3E9D7',
+  charcoal: '#302E28',
+  taupe: '#756E62',
+  wood: '#7B5A3E',
+  woodDark: '#5C4230',
+  stroke: '#CFC0A8',
+  shCard: '0 6px 0 rgba(80, 58, 38, 0.18), 0 12px 26px rgba(48, 46, 40, 0.12)',
+  shRaised: '0 10px 0 rgba(80, 58, 38, 0.16), 0 18px 36px rgba(48, 46, 40, 0.18)',
+  shInset: 'inset 0 2px 4px rgba(48, 46, 40, 0.12)',
+} as const;
+
+/** Player colors — always paired with a number or avatar, never used alone. */
+export const PLAYER_COLORS = ['#5F7A3A', '#C66B43', '#4D7D91', '#A35D78', '#B58A32', '#74649A'];
+export const playerColor = (index: number) => PLAYER_COLORS[index % PLAYER_COLORS.length];
+
+const display = 'var(--font-display)';
+const body = 'var(--font-body)';
+
 const theme = createTheme({
   palette: {
     mode: 'light',
-    primary: {
-      main: '#7CB342',
-      dark: '#689F38',
-      light: '#9CCC65',
-      contrastText: '#ffffff',
-    },
-    secondary: {
-      main: '#42A5F5',
-      dark: '#1E88E5',
-      contrastText: '#ffffff',
-    },
-    error: {
-      main: '#E57373',
-    },
-    warning: {
-      main: '#FFCC80',
-      contrastText: '#5D4037',
-    },
-    success: {
-      main: '#7CB342',
-    },
-    info: {
-      main: '#29B6F6',
-    },
-    background: {
-      default: '#FAFAFA',
-      paper: '#FFFFFF',
-    },
-    text: {
-      primary: '#37474F',
-      secondary: '#78909C',
-    },
-    divider: 'rgba(55,71,79,0.1)',
+    primary: { main: T.moss, dark: T.mossDark, light: '#7A9750', contrastText: T.paper },
+    secondary: { main: T.mustard, dark: '#BE8C2E', contrastText: T.charcoal },
+    error: { main: T.accuse, dark: T.accuseDark, contrastText: T.paper },
+    warning: { main: T.burnt, contrastText: T.paper },
+    success: { main: T.leaf, contrastText: T.paper },
+    info: { main: T.wood, contrastText: T.paper },
+    background: { default: T.table, paper: T.paper },
+    text: { primary: T.charcoal, secondary: T.taupe },
+    divider: T.stroke,
   },
   typography: {
-    fontFamily: "'Kanit', 'Arial', sans-serif",
-    h1: { fontWeight: 700, letterSpacing: '-0.02em' },
-    h2: { fontWeight: 700, letterSpacing: '-0.01em' },
-    h3: { fontWeight: 700 },
-    h4: { fontWeight: 700 },
-    h5: { fontWeight: 700 },
-    h6: { fontWeight: 600 },
-    button: { fontWeight: 600 },
-    caption: { letterSpacing: '0.04em' },
+    fontFamily: body,
+    h1: { fontFamily: display, fontSize: '2.5rem', fontWeight: 700, letterSpacing: '-0.01em' },
+    h2: { fontFamily: display, fontSize: '1.75rem', fontWeight: 700 },
+    h3: { fontFamily: display, fontSize: '1.25rem', fontWeight: 700 },
+    h4: { fontFamily: display, fontWeight: 700 },
+    h5: { fontFamily: display, fontWeight: 700 },
+    h6: { fontFamily: display, fontWeight: 600 },
+    body1: { fontSize: '1rem', lineHeight: 1.6 },
+    body2: { fontSize: '0.875rem', lineHeight: 1.6 },
+    button: { fontFamily: body, fontWeight: 700 },
+    caption: { fontSize: '0.75rem' },
+    overline: {
+      fontFamily: body,
+      fontSize: '0.75rem',
+      fontWeight: 700,
+      letterSpacing: '0.08em',
+      textTransform: 'uppercase',
+    },
   },
-  shape: {
-    borderRadius: 24,
-  },
+  shape: { borderRadius: 18 },
   components: {
     MuiButton: {
+      defaultProps: { disableElevation: true },
       styleOverrides: {
         root: {
           textTransform: 'none',
-          fontWeight: 600,
-          borderRadius: '1.5rem',
-          boxShadow: 'none',
-          transition: 'transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 200ms ease, background-color 200ms ease',
-          '&:active': {
-            transform: 'translateY(1px)',
-          },
+          fontWeight: 700,
+          borderRadius: 'var(--r-pill)',
+          padding: '14px 22px',
+          minHeight: 44,
+          transition: 'transform 160ms var(--spring), box-shadow 160ms ease, background-color 160ms ease',
         },
+        // Wooden buttons have visible thickness; the shadow compresses on press.
         containedPrimary: {
-          backgroundColor: '#7CB342',
-          '&:hover': {
-            backgroundColor: '#6FA23B',
-            boxShadow: '0 6px 16px rgba(124,179,66,0.35)',
-            transform: 'translateY(-2px)',
-          },
+          backgroundColor: T.moss,
+          color: T.paper,
+          boxShadow: `0 5px 0 ${T.mossDark}`,
+          '&:hover': { backgroundColor: '#6B8842', boxShadow: `0 7px 0 ${T.mossDark}`, transform: 'translateY(-2px)' },
+          '&:active': { boxShadow: `0 2px 0 ${T.mossDark}`, transform: 'translateY(2px)' },
+          '&.Mui-disabled': { backgroundColor: '#B9B1A0', color: T.paper, boxShadow: '0 5px 0 #9C9484' },
         },
         containedSecondary: {
-          backgroundColor: '#42A5F5',
-          '&:hover': {
-            backgroundColor: '#3B95DD',
-            boxShadow: '0 6px 16px rgba(66,165,245,0.35)',
-            transform: 'translateY(-2px)',
-          },
+          backgroundColor: T.mustard,
+          color: T.charcoal,
+          boxShadow: '0 5px 0 #A9771F',
+          '&:hover': { backgroundColor: '#E3B155', boxShadow: '0 7px 0 #A9771F', transform: 'translateY(-2px)' },
+          '&:active': { boxShadow: '0 2px 0 #A9771F', transform: 'translateY(2px)' },
+        },
+        containedError: {
+          backgroundColor: T.accuse,
+          color: T.paper,
+          boxShadow: `0 6px 0 ${T.accuseDark}`,
+          '&:hover': { backgroundColor: '#C6543F', boxShadow: `0 8px 0 ${T.accuseDark}`, transform: 'translateY(-2px)' },
+          '&:active': { boxShadow: `0 2px 0 ${T.accuseDark}`, transform: 'translateY(2px)' },
+        },
+        containedSuccess: {
+          backgroundColor: T.leaf,
+          color: T.paper,
+          boxShadow: '0 6px 0 #527043',
+          '&:hover': { backgroundColor: '#799C67', boxShadow: '0 8px 0 #527043', transform: 'translateY(-2px)' },
+          '&:active': { boxShadow: '0 2px 0 #527043', transform: 'translateY(2px)' },
         },
         outlined: {
-          borderWidth: '1.5px',
-          '&:hover': { borderWidth: '1.5px' },
+          backgroundColor: T.paper,
+          borderWidth: 2,
+          borderColor: T.wood,
+          color: T.charcoal,
+          '&:hover': { borderWidth: 2, borderColor: T.wood, backgroundColor: '#F0E3CD' },
         },
       },
     },
@@ -95,9 +122,10 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: 'none',
-          borderRadius: '1.5rem',
-          border: '1px solid rgba(55,71,79,0.08)',
-          boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+          backgroundColor: T.paper,
+          borderRadius: 'var(--r-card)',
+          border: `2px solid ${T.stroke}`,
+          boxShadow: T.shCard,
         },
       },
     },
@@ -105,29 +133,40 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiOutlinedInput-root': {
-            borderRadius: '1rem',
-            backgroundColor: '#FFFFFF',
-            '& fieldset': { borderColor: 'rgba(55,71,79,0.2)' },
-            '&:hover fieldset': { borderColor: '#7CB342' },
-            '&.Mui-focused fieldset': { borderColor: '#7CB342', borderWidth: 2 },
+            borderRadius: 'var(--r-sm)',
+            backgroundColor: T.paper,
+            minHeight: 52,
+            '& fieldset': { borderColor: T.wood, borderWidth: 2 },
+            '&:hover fieldset': { borderColor: T.wood },
+            '&.Mui-focused fieldset': { borderColor: T.moss, borderWidth: 3 },
           },
-          '& .MuiInputLabel-root.Mui-focused': { color: '#689F38' },
+          '& .MuiInputLabel-root': { color: T.taupe, fontWeight: 600 },
+          '& .MuiInputLabel-root.Mui-focused': { color: T.mossDark },
         },
       },
     },
     MuiChip: {
       styleOverrides: {
-        root: {
-          fontFamily: "'Kanit', 'Arial', sans-serif",
-          fontWeight: 600,
-        },
+        root: { fontFamily: body, fontWeight: 700, borderRadius: 'var(--r-pill)' },
       },
     },
     MuiAlert: {
       styleOverrides: {
-        root: {
-          borderRadius: '1rem',
+        root: { borderRadius: 'var(--r-sm)', border: `2px solid ${T.stroke}`, fontWeight: 600 },
+      },
+    },
+    MuiTooltip: {
+      styleOverrides: {
+        tooltip: {
+          backgroundColor: T.charcoal,
+          color: T.paper,
+          fontFamily: body,
+          fontSize: '0.8rem',
+          fontWeight: 600,
+          borderRadius: 'var(--r-sm)',
+          padding: '8px 12px',
         },
+        arrow: { color: T.charcoal },
       },
     },
   },
